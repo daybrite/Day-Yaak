@@ -29,6 +29,9 @@ jobs:
       project-path: apps/yaak-day
       targets: macos-appkit, macos-gtk, macos-qt, linux-gtk, linux-qt, windows-winui, ios-uikit, android-mdc, harmony-arkui
       scripts: dayscript/demo.yaml
+      # Yaak's own crates are upstream code this fork does not maintain; the Day project
+      # depends on them by path, so the formatting check names only its own package.
+      preflight-exclude: crates
       # The example workspace is created on first launch, so the walkthrough has requests to
       # open without a network.
       launch-env: DAY_DATA_DIR=/tmp/yaak-day-ci

@@ -34,6 +34,21 @@ flow:
   - wait_idle: {}
   - screenshot: new-request
 
+  # A JSON body in the styled editor: typed text reaches the store, and the highlighter restyles
+  # it in place (the caret stays where the typing left it).
+  - select: { id: body-kind, index: 1 }
+  - wait_idle: {}
+  - wait_for: { id: body }
+  # Code mode: Tab indents instead of leaving the editor. On the empty body the caret can only
+  # be at the start, so the result is the same two spaces on every toolkit.
+  - key: { id: body, key: Tab }
+  - wait_idle: {}
+  - assert_text: { id: body, text: "  " }
+  - input: { id: body, text: "{\"name\": \"${[ user ]}\", \"count\": 3, \"ok\": true}" }
+  - wait_idle: {}
+  - assert_text: { id: body, text: "{\"name\": \"${[ user ]}\", \"count\": 3, \"ok\": true}" }
+  - screenshot: body-json
+
   # The same host re-presented at a phone's width: the editor is a pushed layer with a
   # request/response picker.
   - size_class: { width: compact }

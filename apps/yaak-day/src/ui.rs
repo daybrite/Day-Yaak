@@ -5,6 +5,8 @@ use crate::engine::Sent;
 use crate::model::{BODY_KINDS, HeaderRowFields, METHODS, RequestRow, Scene};
 use crate::res;
 use day::prelude::*;
+use day_piece_texteditor::highlight::{Language, Palette, highlight_with_templates, highlighter};
+use day_piece_texteditor::{TextEditorBuilder, text_editor_text};
 
 /// The pushed editor's bar title: the open request's name, or the workspace's while none is.
 pub(crate) fn detail_title(scene: Scene) -> String {
@@ -214,10 +216,13 @@ fn editor(scene: Scene) -> impl Piece {
 fn url_bar(scene: Scene) -> impl Piece {
     row((
         picker(METHODS, scene.method).menu().id("method"),
-        text_field(scene.url)
+        // A single-line styled editor rather than a text field, so a template tag reads as one
+        // in the URL; Return sends.
+        text_editor_text(scene.url)
+            .single_line()
             .placeholder(res::str::url_hint())
-            .input_purpose(InputPurpose::Url)
             .on_submit(move || scene.send())
+            .highlight(highlighter(Language::Plain, Palette::default(), true))
             .id("url")
             .grow(),
         button(move || {
@@ -272,10 +277,21 @@ fn request_pane(scene: Scene) -> impl Piece {
             when(
                 move || scene.body_kind.get() != 0,
                 move || {
-                    text_area(scene.body)
+                    // The styled editor over the body string, highlighted as whatever the body
+                    // kind says it is; the kind is read inside the highlighter, so switching it
+                    // restyles the same text in place.
+                    let palette = Palette::default();
+                    text_editor_text(scene.body)
+                        .code()
                         .placeholder(res::str::body_hint())
-                        .spellcheck(false)
                         .min_lines(8)
+                        .highlight(move |text| {
+                            let language = match scene.body_kind.get() {
+                                1 => Language::Json,
+                                _ => Language::Plain,
+                            };
+                            highlight_with_templates(language, text, &palette)
+                        })
                         .id("body")
                 },
             ),
@@ -310,8 +326,12 @@ fn headers_editor(scene: Scene) -> impl Piece {
                 .placeholder(res::str::header_name_hint())
                 .id_keyed("header-name", slot.key())
                 .grow(),
-            text_field(slot.value())
+            // The value binds through the store like the name, in a single-line styled editor
+            // so a `${[ … ]}` tag shows as one.
+            text_editor_text(slot.value())
+                .single_line()
                 .placeholder(res::str::header_value_hint())
+                .highlight(highlighter(Language::Plain, Palette::default(), true))
                 .id_keyed("header-value", slot.key())
                 .grow(),
             button("×")
@@ -399,7 +419,18 @@ fn response_view(sent: Sent) -> impl Piece {
                 },
             ),
             label(res::str::section_response_body()).font(Font::Headline),
-            label(body).monospace().selectable().id("response-body"),
+            // Read-only, highlighted by the content type: the same editor the request body uses,
+            // so a JSON response reads the way the request that produced it does.
+            text_editor_text(Signal::new(body))
+                .editable(false)
+                .spellcheck(false)
+                .min_lines(3)
+                .highlight(highlighter(
+                    sent.content_type.as_deref().map(Language::for_mime).unwrap_or(Language::Plain),
+                    Palette::default(),
+                    false,
+                ))
+                .id("response-body"),
         ))
         .spacing(8.0)
         .align(HAlign::Leading)
