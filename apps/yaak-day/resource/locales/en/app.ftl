@@ -16,6 +16,9 @@ cmd_new_request = New Request
 cmd_delete = Delete
 cmd_send = Send
 cmd_sending = Sending…
+cmd_layout = Switch layout
+cmd_layout_stack = Put the response under the request
+cmd_layout_beside = Put the response beside the request
 cmd_add_header = Add
 
 field_name = Name

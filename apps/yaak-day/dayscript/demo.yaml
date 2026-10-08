@@ -49,6 +49,14 @@ flow:
   - assert_text: { id: body, text: "{\"name\": \"${[ user ]}\", \"count\": 3, \"ok\": true}" }
   - screenshot: body-json
 
+  # The layout button stacks the response under the request and back. Only the wide editor
+  # has the split; on a phone the button is there but the picker's one-pane layout stays.
+  - toolbar: { item: tb-layout }
+  - wait_idle: {}
+  - screenshot: stacked
+  - toolbar: { item: tb-layout }
+  - wait_idle: {}
+
   # The same host re-presented at a phone's width: the editor is a pushed layer with a
   # request/response picker.
   - size_class: { width: compact }

@@ -71,6 +71,10 @@ pub(crate) struct Scene {
     pub response: Signal<Option<Sent>>,
     /// Which pane a compact window shows: the request or the response.
     pub pane: Signal<usize>,
+    /// The wide editor's layout: the response under the request (`true`) or beside it.
+    pub stacked: Signal<bool>,
+    /// The request pane's share of the wide editor's split.
+    pub split: Signal<f64>,
 }
 
 impl Ambient for Scene {
@@ -96,6 +100,8 @@ impl Ambient for Scene {
             sending: Signal::new(false),
             response: Signal::new(None),
             pane: Signal::new(0),
+            stacked: Signal::new(false),
+            split: Signal::new(0.5),
         }
     }
 }

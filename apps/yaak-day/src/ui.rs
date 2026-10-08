@@ -6,7 +6,7 @@ use crate::model::{BODY_KINDS, HeaderRowFields, METHODS, RequestRow, Scene};
 use crate::res;
 use day::prelude::*;
 use day_piece_texteditor::highlight::{Language, Palette, highlight_with_templates, highlighter};
-use day_piece_texteditor::{TextEditorBuilder, text_editor_text};
+use day_piece_texteditor::text_editor_text;
 
 /// The pushed editor's bar title: the open request's name, or the workspace's while none is.
 pub(crate) fn detail_title(scene: Scene) -> String {
@@ -121,14 +121,34 @@ pub(crate) fn request_page() -> impl Piece {
         ),
     ))
     .grow()
-    .toolbar(
-        toolbar_button("tb-send", res::str::cmd_send())
-            .icon(Symbol::Play)
-            .tooltip(res::str::cmd_send())
-            .placement(ToolbarPlacement::Primary)
-            .enabled_when(move || scene.selected.get().is_some() && !scene.sending.get())
-            .action(move || scene.send()),
-    )
+    // Derived, not fixed: the layout button's glyph shows the arrangement a press gives, so
+    // the items are rebuilt whenever `stacked` flips.
+    .toolbar(move || {
+        let stacked = scene.stacked.get();
+        vec![
+            // Stack the response under the request, or put it back beside it. Only the wide
+            // editor has the split; a phone shows one pane at a time behind its picker.
+            toolbar_button("tb-layout", res::str::cmd_layout())
+                .image(if stacked {
+                    res::vectors::layout_beside
+                } else {
+                    res::vectors::layout_stack
+                })
+                .tooltip(if stacked {
+                    res::str::cmd_layout_beside()
+                } else {
+                    res::str::cmd_layout_stack()
+                })
+                .enabled_when(move || scene.selected.get().is_some())
+                .action(move || scene.stacked.update(|s| *s = !*s)),
+            toolbar_button("tb-send", res::str::cmd_send())
+                .image(res::vectors::send)
+                .tooltip(res::str::cmd_send())
+                .placement(ToolbarPlacement::Primary)
+                .enabled_when(move || scene.selected.get().is_some() && !scene.sending.get())
+                .action(move || scene.send()),
+        ]
+    })
 }
 
 fn empty_state(scene: Scene) -> impl Piece {
@@ -165,14 +185,21 @@ fn editor(scene: Scene) -> impl Piece {
             ),
             move |slot: ItemSlot<bool, bool>| {
                 if slot.key() {
+                    // The toolkit's own splitter where there is one: the request form and the
+                    // response, side by side or stacked (the toolbar's layout button), the
+                    // divider's position kept per window.
                     Either::Left(
-                        row((
-                            request_pane(scene).grow(),
-                            divider().vertical(),
-                            response_pane(scene).grow(),
-                        ))
-                        .spacing(8.0)
-                        .grow(),
+                        split(request_pane(scene), response_pane(scene))
+                            .axis(move || {
+                                if scene.stacked.get() {
+                                    SplitAxis::Vertical
+                                } else {
+                                    SplitAxis::Horizontal
+                                }
+                            })
+                            .fraction(scene.split)
+                            .id("editor-split")
+                            .grow(),
                     )
                 } else {
                     Either::Right(

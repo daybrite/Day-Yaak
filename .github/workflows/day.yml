@@ -28,6 +28,12 @@ jobs:
     with:
       project-path: apps/yaak-day
       targets: macos-appkit, macos-gtk, macos-qt, linux-gtk, linux-qt, windows-winui, ios-uikit, android-mdc, harmony-arkui
+      # Build against the tip of the day branch the app tracks, not the revision the committed
+      # lock pins: a sample app exists to prove the current framework still builds it, and a
+      # lock left at an older revision would silently stop testing day at all. The revision is
+      # resolved once per run, so every leg compiles the same one. Refresh the lock locally
+      # (`cargo update -p day`) when a new framework API lands, so a local build matches.
+      update-day-deps: true
       scripts: dayscript/demo.yaml
       # Yaak's own crates are upstream code this fork does not maintain; the Day project
       # depends on them by path, so the formatting check names only its own package.
