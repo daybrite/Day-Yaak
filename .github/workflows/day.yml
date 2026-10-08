@@ -1,0 +1,35 @@
+name: day
+
+# Builds the Day client under apps/yaak-day for every Day target it declares, runs its
+# walkthrough with screenshots, and packs it, through the shared Day workflow
+# (https://github.com/daybrite/actions). Yaak's own workflows are untouched.
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+    paths:
+      - "apps/yaak-day/**"
+      - "crates/**"
+      - ".github/workflows/day.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    uses: daybrite/actions/.github/workflows/dayapp.yml@v1
+    permissions:
+      contents: write # release-asset upload on tag builds
+      pages: write    # the project website (apps/yaak-day/website) → GitHub Pages
+      id-token: write # deploy-pages OIDC token
+    secrets: inherit
+    with:
+      project-path: apps/yaak-day
+      targets: macos-appkit, macos-gtk, macos-qt, linux-gtk, linux-qt, windows-winui, ios-uikit, android-mdc, harmony-arkui
+      scripts: dayscript/demo.yaml
+      # The example workspace is created on first launch, so the walkthrough has requests to
+      # open without a network.
+      launch-env: DAY_DATA_DIR=/tmp/yaak-day-ci
+      tolerate-failures: true

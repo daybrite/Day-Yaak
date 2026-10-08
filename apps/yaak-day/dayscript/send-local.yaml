@@ -1,0 +1,18 @@
+# A real send, against a server on this machine (https://daybrite.dev/docs/dayscript):
+#
+#     python3 -m http.server 8765 --directory <a dir with hello.json>
+#     day launch -p macos-appkit --script dayscript/send-local.yaml
+#
+# Not part of the CI run, which starts no server. `YAAK_DAY_URL` names the URL to send to.
+flow:
+  - wait_for: { id: nav }
+  - wait_for: { id: request-list }
+  - toolbar: { item: tb-new }
+  - wait_idle: {}
+  - input: { id: url, text: "http://127.0.0.1:8765/hello.json" }
+  - wait_idle: {}
+  - tap: { id: send }
+  - wait_for: { id: status, timeout_secs: 30 }
+  - assert_text: { id: status, text: "200 OK" }
+  - assert_visible: { id: response-body }
+  - screenshot: sent

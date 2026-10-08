@@ -1,0 +1,75 @@
+[package]
+name = "yaak-day"
+version.workspace = true
+edition = "2024"
+# Generates typed `res::` constants from `resource/` (see build.rs).
+build = "build.rs"
+
+[features]
+# `mock` keeps bare cargo and rust-analyzer compiling; `day build` overrides it with
+# `--no-default-features --features <backend>` (https://daybrite.dev/docs/project-structure).
+default = ["mock"]
+appkit = ["day/appkit"]
+gtk = ["day/gtk"]
+qt = ["day/qt"]
+uikit = ["day/uikit"]
+mdc = ["day/mdc"]
+xaml = ["day/xaml"]
+winui = ["day/winui"]
+arkui = ["day/arkui"]
+dom = ["day/dom"]
+mock = ["day/mock"]
+
+# rlib for the desktop bin; the mobile pipeline requests staticlib/cdylib via `cargo rustc`.
+[lib]
+# A constant lib name: staged artifacts and the `dayapp::` import never move on a package rename.
+name = "dayapp"
+crate-type = ["rlib"]
+
+[dependencies]
+day = { git = "https://github.com/daybrite/day.git", features = ["model"] }
+day-piece-settings = { git = "https://github.com/daybrite/day.git" }
+day-part-fs = { git = "https://github.com/daybrite/day.git" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Yaak's own engine, by path into this checkout: the models and their SQLite store, the send
+# pipeline, templates, and TLS. The same crates the desktop app, the CLI and the server use;
+# nothing here depends on Tauri. See src/engine.rs for how they run beside Day's main loop.
+yaak = { path = "../../crates/yaak" }
+yaak-http = { path = "../../crates/yaak-http" }
+yaak-lifecycle = { path = "../../crates/yaak-lifecycle" }
+yaak-models = { path = "../../crates/yaak-models" }
+yaak-templates = { path = "../../crates/yaak-templates" }
+yaak-tls = { path = "../../crates/yaak-tls" }
+# Yaak's engine is async over tokio. Day has no runtime of its own, so this app owns one on a
+# background thread (https://daybrite.dev/docs/async, rule 4) and hands results back through
+# `Setter`.
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+async-trait = "0.1"
+log = "0.4"
+
+# yaak-http's reqwest uses native-tls, which is OpenSSL on Android. No Android image ships
+# OpenSSL headers, so the Android build compiles it from source (needs perl on the build host).
+[target.'cfg(target_os = "android")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
+
+# reqwest reads the system proxy through SystemConfiguration, whose link directive is inside
+# the Rust static library and does not reach the Xcode link; declaring it here does
+# (https://daybrite.dev/docs/extending, the macOS table).
+[package.metadata.day.macos]
+frameworks = ["SystemConfiguration"]
+
+[package.metadata.day.ios]
+frameworks = ["SystemConfiguration"]
+
+[build-dependencies]
+day-build = { git = "https://github.com/daybrite/day.git" }
+
+# Its own workspace: a package nested inside Yaak's workspace without being a member fails
+# every cargo command. The Yaak crates above still resolve their `workspace = true`
+# dependencies from Yaak's root, because each finds its own workspace from its own path.
+[workspace]
+
+[workspace.package]
+version = "0.1.0"

@@ -1,0 +1,29 @@
+# Yaak's website — built from this file plus data the project already maintains, by the
+# daysite template (https://github.com/daybrite/daysite).
+#
+# The repository's `.github/workflows/day.yml` uses the daybrite/actions dayapp workflow, so the
+# presence of this file makes it build and deploy the site to the repo's GitHub Pages on pushes
+# to the default branch and on every release tag: a landing page, a screenshot gallery from the
+# dayscript captures, and downloads. One-time repo setup: Settings → Pages → Source = "GitHub
+# Actions", and the workflow permissions shown in the actions README.
+#
+# Setup, customization, GitHub Pages, and custom domains:
+# https://daybrite.dev/docs/websites
+#
+# Preview locally:
+#   cd website
+#   git clone https://github.com/daybrite/daysite .daysite   # gitignored
+#   npm --prefix .daysite ci
+#   node .daysite/scripts/preview.mjs           # this checkout, one channel
+#   node .daysite/scripts/preview.mjs --ci      # both channels, from GitHub (needs `gh`)
+
+# The site's canonical URL: the GitHub Pages address of this repository.
+host = "https://daybrite.github.io/Day-Yaak"
+
+# The landing page's About section: the fork's README, which describes the Day client and how it
+# was added to Yaak. The path is relative to this project's root (the directory holding Day.toml).
+about = "../../.github/README.md"
+
+tagline = "Yaak's API client, with native Day interfaces on desktop and mobile"
+accent-color = "#7C3AED"
+default-platform = "macos"

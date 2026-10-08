@@ -1,0 +1,43 @@
+# The walkthrough (https://daybrite.dev/docs/dayscript): drives the running app by element id
+# on any target, and doubles as its test. It sends nothing: the example workspace's requests
+# point at a public demo API, and a CI leg should not depend on it.
+#
+#     day launch -p macos-appkit --script dayscript/demo.yaml
+flow:
+  # The nav host mounts on every platform; which chrome it wears depends on the window width.
+  - wait_for: { id: nav }
+  - wait_for: { id: request-list }
+  - screenshot: workspace
+
+  # Open the first request of the example workspace and read its editor back.
+  - select: { id: request-list, index: 0 }
+  - wait_idle: {}
+  - wait_for: { id: url }
+  - assert_visible: { id: method }
+  - assert_visible: { id: send }
+  - screenshot: request
+
+  # The editor writes the store as the user types: rename, and the list row follows.
+  - input: { id: name, text: "Renamed request" }
+  - wait_idle: {}
+  - assert_text: { id: name, text: "Renamed request" }
+  - screenshot: renamed
+
+  # A new request lands in the list and opens in the editor. New Request rides the list's own
+  # chrome, so a phone goes back to the list first; a wide window has nothing to pop.
+  - nav_back: {}
+  - wait_idle: {}
+  - toolbar: { item: tb-new }
+  - wait_idle: {}
+  - assert_text: { id: url, text: "" }
+  - input: { id: url, text: "https://example.com/new" }
+  - wait_idle: {}
+  - screenshot: new-request
+
+  # The same host re-presented at a phone's width: the editor is a pushed layer with a
+  # request/response picker.
+  - size_class: { width: compact }
+  - wait_idle: {}
+  - screenshot: compact
+  - size_class: { width: auto }
+  - wait_idle: {}
