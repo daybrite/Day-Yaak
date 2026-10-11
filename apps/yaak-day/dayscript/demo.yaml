@@ -2,7 +2,7 @@
 # on any target, and doubles as its test. It sends nothing: the example workspace's requests
 # point at a public demo API, and a CI leg should not depend on it.
 #
-#     day launch -p macos-appkit --script dayscript/demo.yaml
+#     day launch -t macos-appkit --script dayscript/demo.yaml
 flow:
   # The nav host mounts on every platform; which chrome it wears depends on the window width.
   - wait_for: { id: nav }

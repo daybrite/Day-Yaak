@@ -95,10 +95,10 @@ Everything below runs in `apps/yaak-day/`.
 
 ```sh
 day doctor
-day launch -p macos-appkit                             # build and run
-day launch -p ios-uikit --ios-simulator <simulator-id>
-day launch -p android-mdc --android-device <serial>
-day launch -p macos-appkit --script dayscript/demo.yaml # the walkthrough, with screenshots
+day launch -t macos-appkit                             # build and run
+day launch -t ios-uikit --ios-simulator <simulator-id>
+day launch -t android-mdc --android-device <serial>
+day launch -t macos-appkit --script dayscript/demo.yaml # the walkthrough, with screenshots
 ```
 
 The desktop client reads the installed Yaak's database and applies this checkout's migrations to

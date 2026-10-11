@@ -1,7 +1,7 @@
 # A real send, against a server on this machine (https://daybrite.dev/docs/dayscript):
 #
 #     python3 -m http.server 8765 --directory <a dir with hello.json>
-#     day launch -p macos-appkit --script dayscript/send-local.yaml
+#     day launch -t macos-appkit --script dayscript/send-local.yaml
 #
 # Not part of the CI run, which starts no server. `YAAK_DAY_URL` names the URL to send to.
 flow:

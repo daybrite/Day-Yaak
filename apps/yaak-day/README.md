@@ -37,10 +37,10 @@ keep the fork near the version of Yaak you run.
 
 ```sh
 day doctor
-day launch -p macos-appkit                           # build + run
-day launch -p ios-uikit --ios-simulator <simulator-id>
-day launch -p android-mdc --android-device <serial>
-day launch -p macos-appkit --script dayscript/demo.yaml   # the walkthrough, with screenshots
+day launch -t macos-appkit                           # build + run
+day launch -t ios-uikit --ios-simulator <simulator-id>
+day launch -t android-mdc --android-device <serial>
+day launch -t macos-appkit --script dayscript/demo.yaml   # the walkthrough, with screenshots
 ```
 
 `dayscript/send-local.yaml` sends a real request to a server on this machine
