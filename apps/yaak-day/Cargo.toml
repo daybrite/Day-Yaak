@@ -52,9 +52,11 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 async-trait = "0.1"
 log = "0.4"
 
-# yaak-http's reqwest uses native-tls, which is OpenSSL on Android. No Android image ships
-# OpenSSL headers, so the Android build compiles it from source (needs perl on the build host).
-[target.'cfg(target_os = "android")'.dependencies]
+# yaak-http's reqwest uses native-tls, which is OpenSSL on Android and HarmonyOS. Neither SDK
+# ships OpenSSL headers or libraries, so those builds compile it from source (needs perl on the
+# build host); openssl-src knows the `*-unknown-linux-ohos` triples and takes the compiler Day
+# sets for the target.
+[target.'cfg(any(target_os = "android", target_env = "ohos"))'.dependencies]
 openssl = { version = "0.10", features = ["vendored"] }
 
 # reqwest reads the system proxy through SystemConfiguration, whose link directive is inside

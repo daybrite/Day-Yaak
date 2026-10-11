@@ -10,7 +10,7 @@ chrono = { workspace = true }
 dunce = "1.0.4"
 futures-util = "0.3.30"
 hex = { workspace = true }
-keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
+keyring = { workspace = true, features = ["apple-native", "windows-native"] }
 log = { workspace = true }
 md5 = "0.7.0"
 path-slash = "0.2.1"
@@ -28,3 +28,9 @@ yaak-crypto = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
 zip = "7"
+
+# The Secret Service is a desktop Linux facility. OpenHarmony reports `target_os = "linux"` too,
+# which would pull D-Bus into a platform that has none; there keyring falls back to its mock store,
+# as it does on Android.
+[target.'cfg(all(target_os = "linux", not(target_env = "ohos")))'.dependencies]
+keyring = { workspace = true, features = ["sync-secret-service"] }
