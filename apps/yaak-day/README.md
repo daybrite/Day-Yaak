@@ -58,3 +58,14 @@ day launch -t macos-appkit --script dayscript/demo.yaml   # the walkthrough, wit
 - `website/` — the project website (daysite), which the same workflow publishes to GitHub Pages.
   Its About section is the fork's README at `.github/README.md`, which also tells how this
   directory was added to Yaak.
+
+
+## Generated native projects
+
+Use a Day CLI with automatic native project generation; Apple builds require **Xcode 27
+or newer**. Xcode project documents, Android Gradle files, and HarmonyOS hvigor files are
+created under `build/` by `day prepare`, `day build`, and `day launch`. Open the selected
+project with `day open -t <target>`; edits to generated files are disposable. Apple Swift
+sources, plists and `.xcconfig` files, and any Android resource overlays, remain app-owned
+under `platform/`. For additional native configuration, use
+`day project add-target <target> --persist-native-project` to create a persistent override.
