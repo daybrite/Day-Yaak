@@ -4,8 +4,8 @@
 //! sends requests through `yaak`'s send pipeline, which is async over tokio. Day runs no
 //! tokio, so this module owns one runtime on background threads and is the only place that
 //! touches it (https://daybrite.dev/docs/async, rule 4). The database is read and written
-//! synchronously, on whichever thread asks; a send runs on the runtime and reports back to the
-//! UI through a `Setter`.
+//! synchronously, on whichever thread asks; a send runs on the runtime inside a
+//! `day::spawn_blocking` job, so the UI awaits its outcome like any other future.
 //!
 //! The plugin runtime (a Node.js sidecar) is not started: template functions and plugin-provided
 //! authentication are declined at render time with a clear message, and everything else in a
@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use async_trait::async_trait;
-use day::reactive::Setter;
 use log::{info, warn};
 use tokio::sync::{mpsc, watch};
 use yaak::send::{
@@ -131,23 +130,25 @@ impl Engine {
         &self.query_manager
     }
 
-    /// Send `request_id` with `environment_id` active, on the engine's runtime; `done` receives
-    /// the outcome on the UI thread.
-    pub fn send(
-        &'static self,
-        request_id: String,
-        environment_id: Option<String>,
-        done: Setter<Option<Sent>>,
-    ) {
-        // A plain thread drives the runtime for this one send: `block_on` needs no `Send`
+    /// Send `request_id` with `environment_id` active, on the engine's runtime, and resolve
+    /// with the outcome where the caller awaits it (the UI thread, under `day::task`).
+    pub async fn send(&'static self, request_id: String, environment_id: Option<String>) -> Sent {
+        // A blocking job drives the runtime for this one send: `block_on` needs no `Send`
         // bound on the future, which the pipeline's borrowed parameters would not meet.
-        std::thread::Builder::new()
-            .name("yaak-send".into())
-            .spawn(move || {
-                let outcome = self.runtime.block_on(self.send_inner(&request_id, environment_id));
-                done.set(Some(outcome));
-            })
-            .unwrap_or_else(|e| panic!("cannot start a send thread: {e}"));
+        let outcome = day::spawn_blocking(move || {
+            self.runtime.block_on(self.send_inner(&request_id, environment_id))
+        })
+        .await;
+        outcome.unwrap_or_else(|e| Sent::failed(format!("the send did not complete: {e}")))
+    }
+
+    /// The last response stored for a request, as the UI shows one, read off the UI thread:
+    /// the body file can be hundreds of kilobytes.
+    pub async fn last_response_async(&'static self, request_id: String) -> Option<Sent> {
+        day::spawn_blocking(move || self.last_response(&request_id))
+            .await
+            .ok()
+            .flatten()
     }
 
     async fn send_inner(&self, request_id: &str, environment_id: Option<String>) -> Sent {

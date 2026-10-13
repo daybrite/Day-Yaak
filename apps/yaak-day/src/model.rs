@@ -249,7 +249,17 @@ impl Scene {
                 });
             }
         });
-        self.response.set(engine().last_response(id));
+        // The stored response arrives a turn later, from a pool thread; a selection that moved
+        // on meanwhile keeps its own.
+        self.response.set(None);
+        let (selected, response) = (self.selected, self.response);
+        let request_id = id.to_string();
+        day::task(async move {
+            let sent = engine().last_response_async(request_id.clone()).await;
+            if selected.get_untracked().as_deref() == Some(request_id.as_str()) {
+                response.set(sent);
+            }
+        });
         self.pane.set(0);
         self.loading.set(false);
         self.detail_open.set(true);
@@ -381,19 +391,13 @@ impl Scene {
         // Whatever is typed is sent: the writes-back run on the same turn as the edit.
         self.sending.set(true);
         self.pane.set(1);
-        let sending = self.sending;
-        let response = self.response.setter();
-        let done = Signal::new(None::<Sent>);
-        watch(
-            move || done.get(),
-            move |sent, _| {
-                if let Some(sent) = sent.clone() {
-                    sending.set(false);
-                    response.set(Some(sent));
-                }
-            },
-        );
-        engine().send(id, self.environment_id(), done.setter());
+        let (sending, response) = (self.sending, self.response);
+        let environment_id = self.environment_id();
+        day::task(async move {
+            let sent = engine().send(id, environment_id).await;
+            sending.set(false);
+            response.set(Some(sent));
+        });
     }
 
     /// The open request's row, for the window title and the pushed page's bar.

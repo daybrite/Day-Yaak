@@ -13,6 +13,8 @@ on:
       - "crates/**"
       - ".github/workflows/day.yml"
   workflow_dispatch:
+  schedule:
+    - cron: "20 6 * * *"
 
 permissions:
   contents: read
