@@ -1,8 +1,11 @@
 //! The window's pages: the request list pane, the request editor with its response, and
 //! Settings. `lib.rs` arranges them in the nav host; `model.rs` holds what they show.
 
-use crate::engine::Sent;
-use crate::model::{BODY_KINDS, HeaderRowFields, METHODS, RequestRow, Scene};
+use crate::engine::{ResponseSummary, Sent, TimelineRow, size_text};
+use crate::model::{
+    AUTH_KINDS, AUTH_LOCATIONS, BODY_KINDS, HTTP_VERSIONS, METHODS, PairRow, PairRowFields,
+    RequestRow, Rows, Scene, TABS, TRI_STATE, auth, body,
+};
 use crate::res;
 use day::prelude::*;
 use day_piece_texteditor::highlight::{Language, Palette, highlight_with_templates, highlighter};
@@ -212,13 +215,15 @@ fn editor(scene: Scene) -> impl Piece {
                                 scene.pane,
                             )
                             .segmented()
+                            // The id goes on the picker, not on the padding around it: a
+                            // scripted `select` is delivered to the node the id names.
+                            .id("pane-picker")
                             .padding(Insets {
                                 top: 0.0,
                                 leading: 12.0,
                                 bottom: 4.0,
                                 trailing: 12.0,
-                            })
-                            .id("pane-picker"),
+                            }),
                             each(
                                 items(move || vec![scene.pane.get()], |p: &usize| *p),
                                 move |slot: ItemSlot<usize, usize>| {
@@ -239,7 +244,8 @@ fn editor(scene: Scene) -> impl Piece {
     .grow()
 }
 
-/// Method, URL and Send, on one line. Return in the URL field sends too.
+/// Method, URL and Send, on one line. Return in the URL field sends too, and while a send is
+/// in flight the button cancels it.
 fn url_bar(scene: Scene) -> impl Piece {
     row((
         picker(METHODS, scene.method).menu().id("method"),
@@ -254,14 +260,13 @@ fn url_bar(scene: Scene) -> impl Piece {
             .grow(),
         button(move || {
             if scene.sending.get() {
-                res::str::cmd_sending().format()
+                res::str::cmd_cancel().format()
             } else {
                 res::str::cmd_send().format()
             }
         })
         .prominent()
-        .enabled(move || !scene.sending.get())
-        .action(move || scene.send())
+        .action(move || if scene.sending.get_untracked() { scene.cancel() } else { scene.send() })
         .id("send"),
     ))
     .spacing(8.0)
@@ -269,7 +274,8 @@ fn url_bar(scene: Scene) -> impl Piece {
     .padding(Insets { top: 8.0, leading: 12.0, bottom: 8.0, trailing: 12.0 })
 }
 
-/// The request's own settings: its name, environment, headers and body.
+/// The request's own settings: its name and environment, then one tab at a time of its body,
+/// URL parameters, headers, authentication and per-request settings.
 fn request_pane(scene: Scene) -> impl Piece {
     scroll(
         column((
@@ -295,33 +301,20 @@ fn request_pane(scene: Scene) -> impl Piece {
                     )
                 },
             ),
-            heading_row(res::str::section_headers(), scene),
-            headers_editor(scene),
-            label(res::str::section_body()).font(Font::Headline),
-            picker(BODY_KINDS.iter().map(|k| tr(k).format()), scene.body_kind)
+            // Five tabs are wider than a request pane dragged narrow, so the strip scrolls
+            // sideways there instead of losing its last tab.
+            row((picker(TABS.iter().map(|k| tr(k).format()), scene.tab)
                 .segmented()
-                .id("body-kind"),
+                .id("request-tab"),))
+            .fit(RowFit::Scroll),
+            when(move || scene.tab.get() == 0, move || body_tab(scene)),
+            when(move || scene.tab.get() == 1, move || params_tab(scene)),
             when(
-                move || scene.body_kind.get() != 0,
-                move || {
-                    // The styled editor over the body string, highlighted as whatever the body
-                    // kind says it is; the kind is read inside the highlighter, so switching it
-                    // restyles the same text in place.
-                    let palette = Palette::default();
-                    text_editor_text(scene.body)
-                        .code()
-                        .placeholder(res::str::body_hint())
-                        .min_lines(8)
-                        .highlight(move |text| {
-                            let language = match scene.body_kind.get() {
-                                1 => Language::Json,
-                                _ => Language::Plain,
-                            };
-                            highlight_with_templates(language, text, &palette)
-                        })
-                        .id("body")
-                },
+                move || scene.tab.get() == 2,
+                move || pairs_editor(scene, scene.headers, &HEADER_IDS),
             ),
+            when(move || scene.tab.get() == 3, move || auth_tab(scene)),
+            when(move || scene.tab.get() == 4, move || settings_tab(scene)),
         ))
         .spacing(10.0)
         .align(HAlign::Leading)
@@ -329,58 +322,404 @@ fn request_pane(scene: Scene) -> impl Piece {
     )
 }
 
-/// A section heading with its own Add button beside it.
-fn heading_row<M>(title: impl IntoText<M>, scene: Scene) -> impl Piece {
-    row((
-        label(title).font(Font::Headline),
-        spacer(),
-        button(res::str::cmd_add_header())
-            .compact()
-            .action(move || scene.add_header())
-            .id("add-header"),
+/// The element ids of one name-and-value editor, so a walkthrough can tell the headers' rows
+/// from the parameters' and the form's.
+struct PairIds {
+    on: &'static str,
+    name: &'static str,
+    value: &'static str,
+    file: &'static str,
+    remove: &'static str,
+    add: &'static str,
+}
+
+const HEADER_IDS: PairIds = PairIds {
+    on: "header-on",
+    name: "header-name",
+    value: "header-value",
+    file: "header-file",
+    remove: "header-remove",
+    add: "add-header",
+};
+const PARAM_IDS: PairIds = PairIds {
+    on: "param-on",
+    name: "param-name",
+    value: "param-value",
+    file: "param-file",
+    remove: "param-remove",
+    add: "add-param",
+};
+const FORM_IDS: PairIds = PairIds {
+    on: "form-on",
+    name: "form-name",
+    value: "form-value",
+    file: "form-file",
+    remove: "form-remove",
+    add: "add-field",
+};
+
+/// One row per pair: enabled, name, value, remove, and Add under the last. Each field binds
+/// through the store, so typing patches one field and the save watches the store's version.
+/// A multipart form's rows also take a file in place of a value.
+fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
+    column((
+        each(rows.rows(move || rows.keys()), move |slot: ModelSlot<PairRow>| {
+            let key = slot.key();
+            let has_file = move || slot.file().with(|f| f.is_some_and(|f| !f.is_empty()));
+            let takes_file =
+                move || ids.file == FORM_IDS.file && scene.body_kind.get() == body::MULTIPART;
+            // Two halves, side by side where there is room and one over the other on a
+            // phone: the switch with the name, then the value with the row's buttons.
+            let name = row((
+                toggle(slot.enabled()).id_keyed(ids.on, key),
+                text_field(slot.name())
+                    .placeholder(res::str::pair_name_hint())
+                    .id_keyed(ids.name, key)
+                    .grow(),
+            ))
+            .spacing(6.0)
+            .align(VAlign::Center);
+            let value = row((
+                // The value binds through the store like the name, in a single-line styled
+                // editor so a `${[ … ]}` tag shows as one. A row uploading a file names it here.
+                when(
+                    move || !(takes_file() && has_file()),
+                    move || {
+                        text_editor_text(slot.value())
+                            .single_line()
+                            .placeholder(res::str::pair_value_hint())
+                            .highlight(highlighter(Language::Plain, Palette::default(), true))
+                            .id_keyed(ids.value, key)
+                    },
+                )
+                .otherwise(move || {
+                    label(move || slot.file().with(|f| file_name(f.map_or("", |f| f.as_str()))))
+                        .secondary()
+                        .id_keyed(ids.value, key)
+                })
+                .grow(),
+                when(takes_file, move || {
+                    // An icon each way, so the row keeps its width for the name and the value;
+                    // the title is what assistive technology and the tooltip read.
+                    button(move || {
+                        if has_file() {
+                            res::str::cmd_remove_file().format()
+                        } else {
+                            res::str::cmd_choose_file().format()
+                        }
+                    })
+                    .icon(move || if has_file() { Symbol::Close } else { Symbol::Document })
+                    .icon_only()
+                    .compact()
+                    .action(move || {
+                        if has_file() {
+                            slot.file().write_commit(String::new());
+                        } else {
+                            scene.pick_form_file(key);
+                        }
+                    })
+                    .id_keyed(ids.file, key)
+                }),
+                button(res::str::cmd_remove_row())
+                    .icon(Symbol::Delete)
+                    .icon_only()
+                    .compact()
+                    .action(move || scene.remove_row(rows, key))
+                    .id_keyed(ids.remove, key),
+            ))
+            .spacing(6.0)
+            .align(VAlign::Center);
+            row((name.grow(), value.grow()))
+                .spacing(6.0)
+                .align(VAlign::Center)
+                .fit(RowFit::ColumnAt(WidthClass::Compact))
+        }),
+        button(res::str::cmd_add()).compact().action(move || scene.add_row(rows)).id(ids.add),
     ))
-    .align(VAlign::Center)
+    .spacing(8.0)
+    .align(HAlign::Leading)
 }
 
-/// One row per header: enabled, name, value, remove. Each field binds through the store, so
-/// typing patches one field and the save watches the store's version.
-fn headers_editor(scene: Scene) -> impl Piece {
-    let store = scene.headers;
-    each(store.rows(move || store.keys()), move |slot: ModelSlot<crate::model::HeaderRow>| {
-        row((
-            toggle(slot.enabled()).id_keyed("header-on", slot.key()),
-            text_field(slot.name())
-                .placeholder(res::str::header_name_hint())
-                .id_keyed("header-name", slot.key())
-                .grow(),
-            // The value binds through the store like the name, in a single-line styled editor
-            // so a `${[ … ]}` tag shows as one.
-            text_editor_text(slot.value())
-                .single_line()
-                .placeholder(res::str::header_value_hint())
-                .highlight(highlighter(Language::Plain, Palette::default(), true))
-                .id_keyed("header-value", slot.key())
-                .grow(),
-            button("×")
-                .compact()
-                .action(move || scene.remove_header(slot.key()))
-                .id_keyed("header-remove", slot.key()),
-        ))
-        .spacing(6.0)
-        .align(VAlign::Center)
-    })
+/// A path's last component, as a row names the file it uploads.
+fn file_name(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string())
 }
 
-/// The last response: status line, headers, body.
+/// The body: its kind, then that kind's editor.
+fn body_tab(scene: Scene) -> impl Piece {
+    let kind = move || scene.body_kind.get();
+    column((
+        picker(BODY_KINDS.iter().map(|k| tr(k).format()), scene.body_kind).menu().id("body-kind"),
+        when(
+            move || matches!(kind(), body::JSON | body::TEXT | body::XML),
+            move || {
+                // The styled editor over the body string, highlighted as whatever the body
+                // kind says it is; the kind is read inside the highlighter, so switching it
+                // restyles the same text in place.
+                let palette = Palette::default();
+                text_editor_text(scene.body)
+                    .code()
+                    .placeholder(res::str::body_hint())
+                    .min_lines(8)
+                    .highlight(move |text| {
+                        let language = match scene.body_kind.get() {
+                            body::JSON => Language::Json,
+                            body::XML => Language::Xml,
+                            _ => Language::Plain,
+                        };
+                        highlight_with_templates(language, text, &palette)
+                    })
+                    .id("body")
+            },
+        ),
+        when(
+            move || matches!(kind(), body::FORM | body::MULTIPART),
+            move || pairs_editor(scene, scene.form, &FORM_IDS),
+        ),
+        when(
+            move || kind() == body::GRAPHQL,
+            move || {
+                let (palette, variables_palette) = (Palette::default(), Palette::default());
+                column((
+                    label(res::str::graphql_query()).font(Font::Subheadline).secondary(),
+                    text_editor_text(scene.graphql_query)
+                        .code()
+                        .placeholder(res::str::graphql_query_hint())
+                        .min_lines(6)
+                        .highlight(move |text| {
+                            highlight_with_templates(Language::GraphQl, text, &palette)
+                        })
+                        .id("graphql-query"),
+                    label(res::str::graphql_variables()).font(Font::Subheadline).secondary(),
+                    text_editor_text(scene.graphql_variables)
+                        .code()
+                        .placeholder(res::str::graphql_variables_hint())
+                        .min_lines(3)
+                        .highlight(move |text| {
+                            highlight_with_templates(Language::Json, text, &variables_palette)
+                        })
+                        .id("graphql-variables"),
+                ))
+                .spacing(6.0)
+                .align(HAlign::Leading)
+            },
+        ),
+        when(
+            move || kind() == body::BINARY,
+            move || {
+                row((
+                    text_field(scene.binary_path)
+                        .placeholder(res::str::binary_hint())
+                        .id("binary-path")
+                        .grow(),
+                    button(res::str::cmd_choose_file())
+                        .action(move || scene.pick_binary())
+                        .id("binary-choose"),
+                ))
+                .spacing(8.0)
+                .align(VAlign::Center)
+            },
+        ),
+    ))
+    .spacing(10.0)
+    .align(HAlign::Leading)
+}
+
+/// The URL's parameters: query pairs, and values for the path's `:name` placeholders.
+fn params_tab(scene: Scene) -> impl Piece {
+    column((
+        pairs_editor(scene, scene.params, &PARAM_IDS),
+        label(res::str::params_hint()).font(Font::Footnote).secondary(),
+    ))
+    .spacing(10.0)
+    .align(HAlign::Leading)
+}
+
+/// The picker's choices: the fixed ones, and a stored plugin type under its own name.
+fn auth_choices(scene: Scene) -> Vec<String> {
+    let mut choices: Vec<String> = AUTH_KINDS.iter().map(|k| tr(k).format()).collect();
+    let foreign = scene.auth_foreign.get();
+    if !foreign.is_empty() {
+        choices.push(foreign);
+    }
+    choices
+}
+
+/// Authentication: inherited, none, or one of the types this client applies itself.
+fn auth_tab(scene: Scene) -> impl Piece {
+    let kind = move || scene.auth_kind.get();
+    // Secrets stay hidden until asked for; a template tag in one is worth reading.
+    let shown = Signal::new(false);
+    let secret = move |text: Signal<String>, id: &'static str| {
+        secure_field(text).secure(move || !shown.get()).id(id).grow()
+    };
+    column((
+        // Seeded with the stored plugin type when there is one, so the choice it names exists
+        // from the first frame.
+        picker(untrack(move || auth_choices(scene)), scene.auth_kind)
+            .options_reactive(move || auth_choices(scene))
+            .menu()
+            .id("auth-kind"),
+        when(
+            move || kind() == auth::INHERIT,
+            || label(res::str::auth_inherit_hint()).font(Font::Footnote).secondary(),
+        ),
+        when(
+            move || kind() == auth::FOREIGN,
+            move || {
+                label(move || res::str::auth_foreign_hint(scene.auth_foreign.get()).format())
+                    .font(Font::Footnote)
+                    .secondary()
+                    .id("auth-foreign")
+            },
+        ),
+        when(
+            move || kind() == auth::BASIC,
+            move || {
+                form((
+                    labeled(
+                        res::str::auth_username(),
+                        text_field(scene.auth_username).id("auth-username").grow(),
+                    ),
+                    labeled(
+                        res::str::auth_password(),
+                        secret(scene.auth_password, "auth-password"),
+                    ),
+                ))
+            },
+        ),
+        when(
+            move || kind() == auth::BEARER,
+            move || {
+                form((
+                    labeled(res::str::auth_token(), secret(scene.auth_token, "auth-token")),
+                    labeled(
+                        res::str::auth_prefix(),
+                        text_field(scene.auth_prefix).id("auth-prefix").grow(),
+                    ),
+                ))
+            },
+        ),
+        when(
+            move || kind() == auth::API_KEY,
+            move || {
+                form((
+                    labeled(
+                        res::str::auth_location(),
+                        picker(AUTH_LOCATIONS.iter().map(|k| tr(k).format()), scene.auth_location)
+                            .menu()
+                            .id("auth-location"),
+                    ),
+                    labeled(
+                        move || {
+                            if scene.auth_location.get() == 1 {
+                                res::str::auth_key_query().format()
+                            } else {
+                                res::str::auth_key_header().format()
+                            }
+                        },
+                        text_field(scene.auth_key).id("auth-key").grow(),
+                    ),
+                    labeled(res::str::auth_value(), secret(scene.auth_value, "auth-value")),
+                ))
+            },
+        ),
+        when(
+            move || matches!(kind(), auth::BASIC | auth::BEARER | auth::API_KEY),
+            move || {
+                form((
+                    labeled(res::str::auth_show(), toggle(shown).id("auth-show")),
+                    labeled(res::str::auth_enabled(), toggle(scene.auth_enabled).id("auth-on")),
+                ))
+            },
+        ),
+    ))
+    .spacing(10.0)
+    .align(HAlign::Leading)
+}
+
+/// One setting the request may leave to its folder and workspace, or turn on or off itself.
+fn inherited_choice<M>(
+    title: impl IntoText<M>,
+    value: Signal<usize>,
+    id: &'static str,
+) -> impl Piece {
+    labeled(title, picker(TRI_STATE.iter().map(|k| tr(k).format()), value).menu().id(id))
+}
+
+/// What this request overrides of its folder's and workspace's send settings.
+fn settings_tab(scene: Scene) -> impl Piece {
+    column((
+        form((
+            inherited_choice(
+                res::str::setting_follow_redirects(),
+                scene.follow_redirects,
+                "set-redirects",
+            ),
+            inherited_choice(
+                res::str::setting_validate_certificates(),
+                scene.validate_certificates,
+                "set-certificates",
+            ),
+            inherited_choice(
+                res::str::setting_send_cookies(),
+                scene.send_cookies,
+                "set-send-cookies",
+            ),
+            inherited_choice(
+                res::str::setting_store_cookies(),
+                scene.store_cookies,
+                "set-store-cookies",
+            ),
+            labeled(
+                res::str::setting_http_version(),
+                picker(HTTP_VERSIONS.iter().map(|k| tr(k).format()), scene.http_version)
+                    .menu()
+                    .id("set-http-version"),
+            ),
+            labeled(
+                res::str::setting_timeout(),
+                text_field(scene.timeout)
+                    .placeholder(res::str::setting_timeout_hint())
+                    .input_purpose(InputPurpose::Number)
+                    .id("set-timeout")
+                    .grow(),
+            ),
+        )),
+        label(res::str::settings_hint()).font(Font::Footnote).secondary(),
+    ))
+    .spacing(10.0)
+    .align(HAlign::Leading)
+}
+
+/// The response on show: the send in flight, or a stored response with the request's history.
 fn response_pane(scene: Scene) -> impl Piece {
     column((
         when(
             move || scene.sending.get(),
-            || label(res::str::response_sending()).secondary().padding(12.0),
+            move || {
+                row((
+                    label(res::str::response_sending()).secondary(),
+                    button(res::str::cmd_cancel())
+                        .compact()
+                        .action(move || scene.cancel())
+                        .id("cancel"),
+                ))
+                .spacing(10.0)
+                .align(VAlign::Center)
+                .padding(12.0)
+            },
         ),
         when(
             move || !scene.sending.get() && scene.response.get().is_none(),
             || label(res::str::response_none()).secondary().padding(12.0).id("response-none"),
+        ),
+        when(
+            move || !scene.sending.get() && !scene.history.get().is_empty(),
+            move || history_row(scene),
         ),
         each(
             items(
@@ -392,15 +731,46 @@ fn response_pane(scene: Scene) -> impl Piece {
                     }
                 },
                 // The key is the whole response: a new one rebuilds the pane.
-                |s: &Sent| format!("{}:{}:{}", s.status, s.elapsed_ms, s.body_len),
+                |s: &Sent| format!("{}:{}:{}:{}", s.id, s.status, s.elapsed_ms, s.body_len),
             ),
-            |slot: ItemSlot<Sent, String>| response_view(slot.get()),
+            move |slot: ItemSlot<Sent, String>| response_view(scene, slot.get()),
         ),
     ))
     .align(HAlign::Leading)
 }
 
-fn response_view(sent: Sent) -> impl Piece {
+/// One history entry as the picker names it: when it was sent, how it ended, how long it took.
+fn history_label(entry: &ResponseSummary) -> String {
+    if entry.failed {
+        format!("{} · {}", entry.sent_at, res::str::response_failed().format())
+    } else {
+        format!(
+            "{} · {} {} · {} ms",
+            entry.sent_at, entry.status, entry.status_reason, entry.elapsed_ms
+        )
+    }
+}
+
+/// The request's stored responses, newest first, and the way to forget them.
+fn history_row(scene: Scene) -> impl Piece {
+    let labels = move || scene.history.get().iter().map(history_label).collect::<Vec<_>>();
+    row((
+        picker(untrack(labels), scene.history_index)
+            .options_reactive(labels)
+            .menu()
+            .id("history")
+            .grow(),
+        button(res::str::cmd_clear_history())
+            .compact()
+            .action(move || scene.clear_history())
+            .id("clear-history"),
+    ))
+    .spacing(8.0)
+    .align(VAlign::Center)
+    .padding(Insets { top: 12.0, leading: 12.0, bottom: 0.0, trailing: 12.0 })
+}
+
+fn response_view(scene: Scene, sent: Sent) -> impl Piece {
     let status_color = match sent.status {
         200..=299 => Color::hex(0x10B981),
         300..=399 => Color::hex(0xF59E0B),
@@ -415,14 +785,7 @@ fn response_view(sent: Sent) -> impl Piece {
     let meta = format!("{} ms · {}", sent.elapsed_ms, size_text(sent.body_len));
     let error = sent.error.clone().unwrap_or_default();
     let error_shown = error.clone();
-    let headers = sent.headers.clone();
-    let body = if sent.body_truncated {
-        format!("{}\n\n{}", sent.body, res::str::body_truncated().format())
-    } else if sent.body.is_empty() && sent.body_len > 0 {
-        res::str::body_binary().format()
-    } else {
-        sent.body
-    };
+    let (for_body, for_headers, for_timeline) = (sent.clone(), sent.clone(), sent.timeline.clone());
     scroll(
         column((
             row((
@@ -437,27 +800,25 @@ fn response_view(sent: Sent) -> impl Piece {
                     label(error_shown.clone()).color(Color::hex(0xEF4444)).selectable().id("error")
                 },
             ),
-            label(res::str::section_response_headers()).font(Font::Headline),
-            each(
-                items(move || headers.clone(), |h: &(String, String)| h.clone()),
-                |slot: ItemSlot<(String, String), (String, String)>| {
-                    let (name, value) = slot.key();
-                    label(format!("{name}: {value}")).font(Font::Footnote).monospace().selectable()
-                },
+            picker(
+                [
+                    res::str::response_tab_body().format(),
+                    res::str::response_tab_headers().format(),
+                    res::str::response_tab_timeline().format(),
+                ],
+                scene.response_tab,
+            )
+            .segmented()
+            .id("response-tab"),
+            when(move || scene.response_tab.get() == 0, move || response_body(for_body.clone())),
+            when(
+                move || scene.response_tab.get() == 1,
+                move || response_headers(for_headers.clone()),
             ),
-            label(res::str::section_response_body()).font(Font::Headline),
-            // Read-only, highlighted by the content type: the same editor the request body uses,
-            // so a JSON response reads the way the request that produced it does.
-            text_editor_text(Signal::new(body))
-                .editable(false)
-                .spellcheck(false)
-                .min_lines(3)
-                .highlight(highlighter(
-                    sent.content_type.as_deref().map(Language::for_mime).unwrap_or(Language::Plain),
-                    Palette::default(),
-                    false,
-                ))
-                .id("response-body"),
+            when(
+                move || scene.response_tab.get() == 2,
+                move || response_timeline(for_timeline.clone()),
+            ),
         ))
         .spacing(8.0)
         .align(HAlign::Leading)
@@ -465,14 +826,93 @@ fn response_view(sent: Sent) -> impl Piece {
     )
 }
 
-fn size_text(bytes: u64) -> String {
-    if bytes < 1024 {
-        format!("{bytes} B")
-    } else if bytes < 1024 * 1024 {
-        format!("{:.1} KB", bytes as f64 / 1024.0)
+/// Read-only, highlighted by the content type: the same editor the request body uses, so a
+/// JSON response reads the way the request that produced it does.
+fn response_body(sent: Sent) -> impl Piece {
+    let text = if sent.body_truncated {
+        format!("{}\n\n{}", sent.body, res::str::body_truncated().format())
+    } else if sent.body.is_empty() && sent.body_len > 0 {
+        res::str::body_binary().format()
     } else {
-        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        sent.body
+    };
+    text_editor_text(Signal::new(text))
+        .editable(false)
+        .spellcheck(false)
+        .min_lines(3)
+        .highlight(highlighter(
+            sent.content_type.as_deref().map(Language::for_mime).unwrap_or(Language::Plain),
+            Palette::default(),
+            false,
+        ))
+        .id("response-body")
+}
+
+/// One `name: value` line per pair, selectable.
+fn pair_lines(pairs: Vec<(String, String)>) -> impl Piece {
+    column((each(
+        items(
+            move || pairs.iter().cloned().enumerate().collect::<Vec<_>>(),
+            |row: &(usize, (String, String))| row.0,
+        ),
+        |slot: ItemSlot<(usize, (String, String)), usize>| {
+            let (_, (name, value)) = slot.get();
+            label(format!("{name}: {value}")).font(Font::Footnote).monospace().selectable()
+        },
+    ),))
+    .spacing(2.0)
+    .align(HAlign::Leading)
+}
+
+/// What came back, what went out (with authentication and cookies applied), and where to.
+fn response_headers(sent: Sent) -> impl Piece {
+    let mut details = vec![(res::str::detail_url().format(), sent.url.clone())];
+    if !sent.version.is_empty() {
+        details.push((res::str::detail_version().format(), sent.version.clone()));
     }
+    if !sent.remote_addr.is_empty() {
+        details.push((res::str::detail_remote_address().format(), sent.remote_addr.clone()));
+    }
+    details.push((
+        res::str::detail_time_to_headers().format(),
+        format!("{} ms", sent.elapsed_headers_ms),
+    ));
+    details.push((res::str::detail_dns().format(), format!("{} ms", sent.elapsed_dns_ms)));
+    column((
+        label(res::str::section_response_headers()).font(Font::Headline),
+        pair_lines(sent.headers).id("response-headers"),
+        label(res::str::section_request_headers()).font(Font::Headline),
+        pair_lines(sent.request_headers).id("request-headers"),
+        label(res::str::section_details()).font(Font::Headline),
+        pair_lines(details),
+    ))
+    .spacing(6.0)
+    .align(HAlign::Leading)
+}
+
+/// The send as it happened, one event a line: `>` sent, `<` received, `*` a note.
+fn response_timeline(rows: Vec<TimelineRow>) -> impl Piece {
+    let empty = rows.is_empty();
+    column((
+        when(move || empty, || label(res::str::timeline_none()).font(Font::Footnote).secondary()),
+        each(
+            items(
+                move || rows.iter().cloned().enumerate().collect::<Vec<_>>(),
+                |row: &(usize, TimelineRow)| row.0,
+            ),
+            |slot: ItemSlot<(usize, TimelineRow), usize>| {
+                let (_, row) = slot.get();
+                let note = row.mark == '*';
+                let line =
+                    label(format!("{} {}", row.mark, row.text)).font(Font::Footnote).monospace();
+                // Notes recede; what crossed the wire reads at full strength.
+                if note { line.secondary().selectable() } else { line.selectable() }
+            },
+        ),
+    ))
+    .spacing(2.0)
+    .align(HAlign::Leading)
+    .id("timeline")
 }
 
 // ---- settings ---------------------------------------------------------------------------------

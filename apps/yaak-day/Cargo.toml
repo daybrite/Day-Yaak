@@ -51,6 +51,10 @@ yaak-tls = { path = "../../crates/yaak-tls" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 async-trait = "0.1"
 log = "0.4"
+# Basic authentication's encoding and the response history's clock times. Both are already in
+# the build through Yaak's crates, at these versions.
+base64 = "0.22"
+chrono = "0.4"
 
 # yaak-http's reqwest uses native-tls, which is OpenSSL on Android and HarmonyOS. Neither SDK
 # ships OpenSSL headers or libraries, so those builds compile it from source (needs perl on the

@@ -139,6 +139,9 @@ fn menus() -> Vec<MenuEntry> {
                 menu_item(res::str::cmd_send().format())
                     .shortcut(Shortcut::new("Enter"))
                     .action(front(|scene| scene.send())),
+                menu_item(res::str::cmd_cancel().format())
+                    .shortcut(Shortcut::new("."))
+                    .action(front(|scene| scene.cancel())),
             ],
         ),
     ]

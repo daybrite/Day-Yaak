@@ -1,23 +1,101 @@
 //! The per-window `Scene`: which workspace and request a window shows, the editor's bindings
-//! over the open request, and the last response.
+//! over the open request, and the response on show with its history.
 //!
 //! Yaak's store is the document; the scene is a projection of it. Reads go straight to the
 //! database through the engine. The editor's fields are plain signals, loaded when a request is
 //! opened and written back as the user types, so the store (and the desktop app, when it has
-//! the same store open) always holds what the editor shows.
+//! the same store open) always holds what the editor shows. A write happens only when a field
+//! differs from what is stored, so opening a request never touches it, and whatever the stored
+//! request holds that this editor has no field for is written back as found.
 
-use crate::engine::{self, Sent, engine};
+use crate::engine::{self, NATIVE_AUTH_TYPES, ResponseSummary, Sent, engine};
 use day::model::Op;
 use day::prelude::*;
-use yaak_models::models::{Environment, HttpRequestHeader, Workspace};
+use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+use yaak_models::models::{
+    Environment, HttpRequest, HttpRequestHeader, HttpUrlParameter, HttpVersion,
+    InheritedBoolSetting, Workspace,
+};
 
 /// The methods the picker offers, in its order.
 pub(crate) const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
-/// The body kinds the picker offers: none, JSON text, plain text. Yaak stores the text under
-/// `body.text` and the kind as `body_type`.
-pub(crate) const BODY_KINDS: [&str; 3] = ["body_none", "body_json", "body_text"];
-const BODY_TYPES: [Option<&str>; 3] = [None, Some("application/json"), Some("other")];
+/// The request editor's tabs, by catalog key.
+pub(crate) const TABS: [&str; 5] = [
+    "tab_body",
+    "tab_params",
+    "tab_headers",
+    "tab_auth",
+    "tab_settings",
+];
+
+/// The body kinds the picker offers, by catalog key, and the `body_type` Yaak stores for each.
+/// Text kinds keep their text under `body.text`, the two forms their fields under `body.form`,
+/// GraphQL its `query` and `variables`, and a file upload its `filePath`.
+pub(crate) const BODY_KINDS: [&str; 8] = [
+    "body_none",
+    "body_json",
+    "body_text",
+    "body_xml",
+    "body_form",
+    "body_multipart",
+    "body_graphql",
+    "body_binary",
+];
+const BODY_TYPES: [Option<&str>; 8] = [
+    None,
+    Some("application/json"),
+    Some("other"),
+    Some("text/xml"),
+    Some("application/x-www-form-urlencoded"),
+    Some("multipart/form-data"),
+    Some("graphql"),
+    Some("binary"),
+];
+/// Indexes into [`BODY_KINDS`].
+pub(crate) mod body {
+    pub const NONE: usize = 0;
+    pub const JSON: usize = 1;
+    pub const TEXT: usize = 2;
+    pub const XML: usize = 3;
+    pub const FORM: usize = 4;
+    pub const MULTIPART: usize = 5;
+    pub const GRAPHQL: usize = 6;
+    pub const BINARY: usize = 7;
+}
+
+/// The authentication choices, by catalog key: what the folder or workspace gives, none, and
+/// the three types this client applies itself ([`NATIVE_AUTH_TYPES`], in the same order).
+pub(crate) const AUTH_KINDS: [&str; 5] = [
+    "auth_inherit",
+    "auth_none",
+    "auth_basic",
+    "auth_bearer",
+    "auth_apikey",
+];
+/// Indexes into [`AUTH_KINDS`], and one past it for a type only Yaak's plugins provide.
+pub(crate) mod auth {
+    pub const INHERIT: usize = 0;
+    pub const NONE: usize = 1;
+    pub const BASIC: usize = 2;
+    pub const BEARER: usize = 3;
+    pub const API_KEY: usize = 4;
+    /// A plugin's type (OAuth 2, AWS, …): shown by name and kept exactly as stored.
+    pub const FOREIGN: usize = 5;
+}
+/// Where an API key goes, by catalog key; Yaak stores `header` or `query`.
+pub(crate) const AUTH_LOCATIONS: [&str; 2] = ["auth_location_header", "auth_location_query"];
+
+/// A setting the request may leave to its folder and workspace, by catalog key.
+pub(crate) const TRI_STATE: [&str; 3] = ["setting_inherit", "setting_on", "setting_off"];
+/// The HTTP version choices, by catalog key.
+pub(crate) const HTTP_VERSIONS: [&str; 4] = [
+    "setting_inherit",
+    "http_version_auto",
+    "http_version_1",
+    "http_version_2",
+];
 
 /// One request as the list shows it.
 #[derive(Clone, PartialEq)]
@@ -30,14 +108,136 @@ pub(crate) struct RequestRow {
     pub folder: String,
 }
 
-/// One header in the editor. `#[derive(Observable)]` gives each field a two-way binding.
+/// One name and value in the editor: a header, a URL parameter or a form field.
+/// `#[derive(Observable)]` gives each field a two-way binding.
 #[derive(Observable, Clone, PartialEq)]
-pub(crate) struct HeaderRow {
+pub(crate) struct PairRow {
     #[obs(key)]
     pub id: u64,
     pub enabled: bool,
     pub name: String,
     pub value: String,
+    /// The file a multipart field uploads; empty for a field that sends its value.
+    pub file: String,
+    /// What the stored row holds beyond these (its id, a part's content type and file name),
+    /// written back as found.
+    #[obs(skip)]
+    pub extra: Map<String, Value>,
+}
+
+impl PairRow {
+    fn new(id: u64, enabled: bool, name: &str, value: &str) -> PairRow {
+        PairRow {
+            id,
+            enabled,
+            name: name.to_string(),
+            value: value.to_string(),
+            file: String::new(),
+            extra: Map::new(),
+        }
+    }
+
+    /// A stored row with its Yaak id kept for the write-back.
+    fn stored(
+        index: usize,
+        enabled: bool,
+        name: &str,
+        value: &str,
+        id: &Option<String>,
+    ) -> PairRow {
+        let mut row = PairRow::new(index as u64 + 1, enabled, name, value);
+        if let Some(id) = id {
+            row.extra.insert("id".to_string(), Value::String(id.clone()));
+        }
+        row
+    }
+
+    fn stored_id(&self) -> Option<String> {
+        self.extra.get("id").and_then(Value::as_str).map(str::to_string)
+    }
+
+    /// A field of `body.form`, as Yaak stores one.
+    fn from_form(index: usize, field: &Value) -> PairRow {
+        let text = |key: &str| field.get(key).and_then(Value::as_str).unwrap_or_default();
+        let mut row = PairRow::new(
+            index as u64 + 1,
+            field.get("enabled").and_then(Value::as_bool).unwrap_or(true),
+            text("name"),
+            text("value"),
+        );
+        row.file = text("file").to_string();
+        if let Some(object) = field.as_object() {
+            row.extra = object
+                .iter()
+                .filter(|(k, _)| !["enabled", "name", "value", "file"].contains(&k.as_str()))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+        }
+        row
+    }
+
+    fn to_form(&self) -> Value {
+        let mut field = self.extra.clone();
+        field.insert("enabled".to_string(), Value::Bool(self.enabled));
+        field.insert("name".to_string(), Value::String(self.name.clone()));
+        field.insert("value".to_string(), Value::String(self.value.clone()));
+        if !self.file.is_empty() {
+            field.insert("file".to_string(), Value::String(self.file.clone()));
+        }
+        Value::Object(field)
+    }
+}
+
+/// A keyed store of rows, as the scene holds its headers, parameters and form fields.
+pub(crate) type Rows = Store<Keyed<PairRow>>;
+
+fn load_rows(rows: Rows, loaded: Vec<PairRow>) {
+    rows.restructure("load", Op::Set, 0, |k| {
+        for id in k.items().iter().map(|r| r.id).collect::<Vec<_>>() {
+            k.remove(id);
+        }
+        for row in loaded {
+            k.push(row);
+        }
+    });
+}
+
+fn rows_of(rows: Rows) -> Vec<PairRow> {
+    rows.with_untracked(|k| k.items().to_vec())
+}
+
+/// A string stored among a request's authentication values, or `default` where there is none.
+fn stored_text(values: &BTreeMap<String, Value>, key: &str, default: &str) -> String {
+    match values.get(key) {
+        None | Some(Value::Null) => default.to_string(),
+        Some(Value::String(s)) => s.clone(),
+        Some(other) => other.to_string(),
+    }
+}
+
+/// Write `value` under `key` unless that is what the stored values already amount to, so an
+/// unset value with a default stays unset.
+fn store_text(values: &mut BTreeMap<String, Value>, key: &str, value: String, default: &str) {
+    if stored_text(values, key, default) != value {
+        values.insert(key.to_string(), Value::String(value));
+    }
+}
+
+fn tri_state(setting: &InheritedBoolSetting) -> usize {
+    match (setting.enabled, setting.value) {
+        (false, _) => 0,
+        (true, true) => 1,
+        (true, false) => 2,
+    }
+}
+
+fn from_tri_state(index: usize, stored: &InheritedBoolSetting) -> InheritedBoolSetting {
+    match index {
+        1 => InheritedBoolSetting { enabled: true, value: true },
+        2 => InheritedBoolSetting { enabled: true, value: false },
+        // Inheriting keeps the value the override last had, as Yaak does.
+        _ => InheritedBoolSetting { enabled: false, value: stored.value },
+    }
 }
 
 /// Everything one window owns. `Copy`, because every field is a handle.
@@ -61,14 +261,58 @@ pub(crate) struct Scene {
     pub name: Signal<String>,
     pub method: Signal<usize>,
     pub url: Signal<String>,
+    /// Which of [`TABS`] the request pane shows.
+    pub tab: Signal<usize>,
+    pub params: Rows,
+    pub headers: Rows,
+
+    /// Index into [`BODY_KINDS`].
     pub body_kind: Signal<usize>,
+    /// The kind whose side effects (the Content-Type header, the method) have been applied: a
+    /// loaded request's own, so only a choice the user makes sets them.
+    body_kind_applied: Signal<usize>,
+    /// A stored text `body_type` the picker has no entry for, kept while the kind stays Text.
+    foreign_body_type: Signal<Option<String>>,
     pub body: Signal<String>,
-    pub headers: Store<Keyed<HeaderRow>>,
-    /// Set while a request is being loaded into the editor, so the writes-back stay quiet.
-    loading: Signal<bool>,
+    pub form: Rows,
+    pub graphql_query: Signal<String>,
+    pub graphql_variables: Signal<String>,
+    pub binary_path: Signal<String>,
+
+    /// Index into [`AUTH_KINDS`], or [`auth::FOREIGN`].
+    pub auth_kind: Signal<usize>,
+    /// The stored type's name while the kind is [`auth::FOREIGN`].
+    pub auth_foreign: Signal<String>,
+    pub auth_enabled: Signal<bool>,
+    pub auth_username: Signal<String>,
+    pub auth_password: Signal<String>,
+    pub auth_token: Signal<String>,
+    pub auth_prefix: Signal<String>,
+    /// Index into [`AUTH_LOCATIONS`].
+    pub auth_location: Signal<usize>,
+    pub auth_key: Signal<String>,
+    pub auth_value: Signal<String>,
+
+    // Per-request settings: indexes into [`TRI_STATE`] and [`HTTP_VERSIONS`].
+    pub follow_redirects: Signal<usize>,
+    pub validate_certificates: Signal<usize>,
+    pub send_cookies: Signal<usize>,
+    pub store_cookies: Signal<usize>,
+    pub http_version: Signal<usize>,
+    /// The timeout in milliseconds as typed; empty inherits.
+    pub timeout: Signal<String>,
 
     pub sending: Signal<bool>,
+    /// The request the send in flight belongs to, for Cancel.
+    sending_request: Signal<Option<String>>,
     pub response: Signal<Option<Sent>>,
+    /// The open request's stored responses, newest first, and which one is on show.
+    pub history: Signal<Vec<ResponseSummary>>,
+    pub history_index: Signal<usize>,
+    /// The history entry whose response has been loaded, so only a choice the user makes loads.
+    history_applied: Signal<usize>,
+    /// Which part of the response shows: body, headers or timeline.
+    pub response_tab: Signal<usize>,
     /// Which pane a compact window shows: the request or the response.
     pub pane: Signal<usize>,
     /// The wide editor's layout: the response under the request (`true`) or beside it.
@@ -81,6 +325,8 @@ impl Ambient for Scene {
     fn create() -> Self {
         let workspaces = engine().db().list_workspaces().unwrap_or_default();
         let first = workspaces.first().map(|w| w.id.clone());
+        let text = || Signal::new(String::new());
+        let rows = || Store::new(Keyed::new(Vec::new()));
         Scene {
             workspaces: Signal::new(workspaces),
             section: Signal::new(first),
@@ -90,18 +336,47 @@ impl Ambient for Scene {
             selected: Signal::new(None),
             detail_open: Signal::new(false),
             scroll_to: Signal::new(None),
-            name: Signal::new(String::new()),
+            name: text(),
             method: Signal::new(0),
-            url: Signal::new(String::new()),
+            url: text(),
+            tab: Signal::new(0),
+            params: rows(),
+            headers: rows(),
             body_kind: Signal::new(0),
-            body: Signal::new(String::new()),
-            headers: Store::new(Keyed::new(Vec::new())),
-            loading: Signal::new(false),
+            body_kind_applied: Signal::new(0),
+            foreign_body_type: Signal::new(None),
+            body: text(),
+            form: rows(),
+            graphql_query: text(),
+            graphql_variables: text(),
+            binary_path: text(),
+            auth_kind: Signal::new(0),
+            auth_foreign: text(),
+            auth_enabled: Signal::new(true),
+            auth_username: text(),
+            auth_password: text(),
+            auth_token: text(),
+            auth_prefix: text(),
+            auth_location: Signal::new(0),
+            auth_key: text(),
+            auth_value: text(),
+            follow_redirects: Signal::new(0),
+            validate_certificates: Signal::new(0),
+            send_cookies: Signal::new(0),
+            store_cookies: Signal::new(0),
+            http_version: Signal::new(0),
+            timeout: text(),
             sending: Signal::new(false),
+            sending_request: Signal::new(None),
             response: Signal::new(None),
+            history: Signal::new(Vec::new()),
+            history_index: Signal::new(0),
+            history_applied: Signal::new(0),
+            response_tab: Signal::new(0),
             pane: Signal::new(0),
             stacked: Signal::new(false),
-            split: Signal::new(0.5),
+            // A little past half: the request side holds rows of controls, the response text.
+            split: Signal::new(0.56),
         }
     }
 }
@@ -119,28 +394,72 @@ impl Scene {
                 self.selected.set(None);
                 self.detail_open.set(false);
                 self.response.set(None);
+                self.history.set(Vec::new());
                 self.reload_requests();
                 self.reload_environments();
             },
         );
-        // One subscription per editor field: a tracked read of each, then one write.
-        let save = move || {
-            if !self.loading.get_untracked() {
-                self.save_editor();
-            }
-        };
-        watch(move || self.name.get(), move |_, _| save());
-        watch(move || self.method.get(), move |_, _| save());
-        watch(move || self.url.get(), move |_, _| save());
-        watch(move || self.body_kind.get(), move |_, _| save());
-        watch(move || self.body.get(), move |_, _| save());
-        let headers = self.headers;
+        // One subscription per editor field: a tracked read of each, then one write, which
+        // `save_editor` skips when the store already holds what the editor shows.
+        let save = move || self.save_editor();
+        for text in [
+            self.name,
+            self.url,
+            self.body,
+            self.graphql_query,
+            self.graphql_variables,
+            self.binary_path,
+            self.auth_username,
+            self.auth_password,
+            self.auth_token,
+            self.auth_prefix,
+            self.auth_key,
+            self.auth_value,
+            self.timeout,
+        ] {
+            watch(move || text.get(), move |_, _| save());
+        }
+        for choice in [
+            self.method,
+            self.auth_kind,
+            self.auth_location,
+            self.follow_redirects,
+            self.validate_certificates,
+            self.send_cookies,
+            self.store_cookies,
+            self.http_version,
+        ] {
+            watch(move || choice.get(), move |_, _| save());
+        }
+        watch(move || self.auth_enabled.get(), move |_, _| save());
+        for rows in [self.params, self.headers, self.form] {
+            watch(
+                move || {
+                    rows.with(|_| {});
+                    rows.version()
+                },
+                move |_, _| save(),
+            );
+        }
+        // A body kind the user picks also sets the Content-Type header and, where a body needs
+        // one, the method; a kind that arrives with a loaded request sets nothing.
         watch(
-            move || {
-                headers.with(|_| {});
-                headers.version()
+            move || self.body_kind.get(),
+            move |kind, _| {
+                if *kind != self.body_kind_applied.get_untracked() {
+                    self.body_kind_chosen(*kind);
+                }
+                save();
             },
-            move |_, _| save(),
+        );
+        // Likewise for the history picker: a choice loads that response, a refresh does not.
+        watch(
+            move || self.history_index.get(),
+            move |index, _| {
+                if *index != self.history_applied.get_untracked() {
+                    self.show_history(*index);
+                }
+            },
         );
     }
 
@@ -222,84 +541,370 @@ impl Scene {
         let Ok(request) = engine().db().get_http_request(id) else {
             return;
         };
-        self.loading.set(true);
         self.selected.set(Some(id.to_string()));
         self.name.set(request.name.clone());
         self.method
             .set(METHODS.iter().position(|m| m.eq_ignore_ascii_case(&request.method)).unwrap_or(0));
         self.url.set(request.url.clone());
-        self.body_kind.set(
-            BODY_TYPES
+        load_rows(
+            self.params,
+            request
+                .url_parameters
                 .iter()
-                .position(|t| *t == request.body_type.as_deref())
-                .unwrap_or(if request.body_type.is_some() { 2 } else { 0 }),
+                .enumerate()
+                .map(|(i, p)| PairRow::stored(i, p.enabled, &p.name, &p.value, &p.id))
+                .collect(),
         );
-        self.body
-            .set(request.body.get("text").and_then(|v| v.as_str()).unwrap_or_default().to_string());
-        self.headers.restructure("load", Op::Set, 0, |k| {
-            for id in k.items().iter().map(|h| h.id).collect::<Vec<_>>() {
-                k.remove(id);
-            }
-            for (i, h) in request.headers.iter().enumerate() {
-                k.push(HeaderRow {
-                    id: i as u64 + 1,
-                    enabled: h.enabled,
-                    name: h.name.clone(),
-                    value: h.value.clone(),
-                });
-            }
+        load_rows(
+            self.headers,
+            request
+                .headers
+                .iter()
+                .enumerate()
+                .map(|(i, h)| PairRow::stored(i, h.enabled, &h.name, &h.value, &h.id))
+                .collect(),
+        );
+        self.load_body(&request);
+        self.load_authentication(&request);
+        self.follow_redirects.set(tri_state(&request.setting_follow_redirects));
+        self.validate_certificates.set(tri_state(&request.setting_validate_certificates));
+        self.send_cookies.set(tri_state(&request.setting_send_cookies));
+        self.store_cookies.set(tri_state(&request.setting_store_cookies));
+        self.http_version.set(
+            match (request.setting_http_version.enabled, &request.setting_http_version.value) {
+                (false, _) => 0,
+                (true, HttpVersion::Auto) => 1,
+                (true, HttpVersion::Http1) => 2,
+                (true, HttpVersion::Http2) => 3,
+            },
+        );
+        self.timeout.set(if request.setting_request_timeout.enabled {
+            request.setting_request_timeout.value.to_string()
+        } else {
+            String::new()
         });
-        // The stored response arrives a turn later, from a pool thread; a selection that moved
-        // on meanwhile keeps its own.
+
+        // The history is a list of facts, read here; the response it names arrives a turn
+        // later, from a pool thread, and a selection that moved on meanwhile keeps its own.
         self.response.set(None);
+        self.history.set(engine().history(id));
+        self.history_applied.set(0);
+        self.history_index.set(0);
+        self.load_response(id.to_string(), None);
+        self.tab.set(0);
+        self.response_tab.set(0);
+        self.pane.set(0);
+        self.detail_open.set(true);
+    }
+
+    fn load_body(self, request: &HttpRequest) {
+        let kind = BODY_TYPES.iter().position(|t| *t == request.body_type.as_deref());
+        // A text type the picker has no entry for edits as Text and keeps its own name.
+        self.foreign_body_type.set(match kind {
+            None => request.body_type.clone(),
+            Some(_) => None,
+        });
+        let kind = kind.unwrap_or(body::TEXT);
+        self.body_kind_applied.set(kind);
+        self.body_kind.set(kind);
+        let text = |key: &str| {
+            request.body.get(key).and_then(Value::as_str).unwrap_or_default().to_string()
+        };
+        self.body.set(text("text"));
+        self.graphql_query.set(text("query"));
+        self.graphql_variables.set(text("variables"));
+        self.binary_path.set(text("filePath"));
+        load_rows(
+            self.form,
+            request
+                .body
+                .get("form")
+                .and_then(Value::as_array)
+                .map(|fields| {
+                    fields.iter().enumerate().map(|(i, f)| PairRow::from_form(i, f)).collect()
+                })
+                .unwrap_or_default(),
+        );
+    }
+
+    fn load_authentication(self, request: &HttpRequest) {
+        let values = &request.authentication;
+        let kind = match request.authentication_type.as_deref() {
+            None => auth::INHERIT,
+            Some("none") => auth::NONE,
+            Some(name) => match NATIVE_AUTH_TYPES.iter().position(|t| *t == name) {
+                Some(native) => auth::BASIC + native,
+                None => auth::FOREIGN,
+            },
+        };
+        self.auth_foreign.set(if kind == auth::FOREIGN {
+            request.authentication_type.clone().unwrap_or_default()
+        } else {
+            String::new()
+        });
+        self.auth_kind.set(kind);
+        self.auth_enabled.set(values.get("disabled").and_then(Value::as_bool) != Some(true));
+        self.auth_username.set(stored_text(values, "username", ""));
+        self.auth_password.set(stored_text(values, "password", ""));
+        self.auth_token.set(stored_text(values, "token", ""));
+        self.auth_prefix.set(stored_text(values, "prefix", "Bearer"));
+        self.auth_location.set(if stored_text(values, "location", "header") == "query" {
+            1
+        } else {
+            0
+        });
+        self.auth_key.set(stored_text(values, "key", ""));
+        self.auth_value.set(stored_text(values, "value", ""));
+    }
+
+    /// Show one stored response of `request_id`: the entry `response_id` names, or the latest.
+    fn load_response(self, request_id: String, response_id: Option<String>) {
         let (selected, response) = (self.selected, self.response);
-        let request_id = id.to_string();
         day::task(async move {
-            let sent = engine().last_response_async(request_id.clone()).await;
+            let sent = engine().response_async(request_id.clone(), response_id).await;
             if selected.get_untracked().as_deref() == Some(request_id.as_str()) {
                 response.set(sent);
             }
         });
-        self.pane.set(0);
-        self.loading.set(false);
-        self.detail_open.set(true);
+    }
+
+    /// The history picker moved to `index`: show that response.
+    fn show_history(self, index: usize) {
+        self.history_applied.set(index);
+        let Some(request_id) = self.selected.get_untracked() else {
+            return;
+        };
+        if let Some(entry) = self.history.get_untracked().get(index) {
+            self.load_response(request_id, Some(entry.id.clone()));
+        }
+    }
+
+    /// Forget the open request's stored responses, once the user confirms.
+    pub(crate) fn clear_history(self) {
+        let Some(request_id) = self.selected.get_untracked() else {
+            return;
+        };
+        day::task(async move {
+            let confirmed = confirm(crate::res::str::confirm_clear_history())
+                .message(crate::res::str::confirm_clear_history_detail())
+                .confirm_label(crate::res::str::cmd_clear_history())
+                .destructive()
+                .await;
+            if !confirmed {
+                return;
+            }
+            engine().clear_history(&request_id);
+            if self.selected.get_untracked().as_deref() == Some(request_id.as_str()) {
+                self.history.set(Vec::new());
+                self.history_applied.set(0);
+                self.history_index.set(0);
+                self.response.set(None);
+            }
+        });
     }
 
     pub(crate) fn clear_selection(self) {
         self.selected.set(None);
     }
 
-    /// Write the editor's fields over the open request.
+    /// The user picked a body kind: give the request the Content-Type header that kind is sent
+    /// with, and a method that carries a body where the kind needs one, as Yaak's editor does.
+    fn body_kind_chosen(self, kind: usize) {
+        let previous = self.body_kind_applied.get_untracked();
+        self.body_kind_applied.set(kind);
+        self.foreign_body_type.set(None);
+        // `None` leaves the header alone (a file upload names its own type or none).
+        let content_type = match kind {
+            body::NONE => Some(None),
+            body::JSON | body::GRAPHQL => Some(Some("application/json")),
+            body::TEXT => Some(Some("text/plain")),
+            body::XML => Some(Some("text/xml")),
+            body::FORM => Some(Some("application/x-www-form-urlencoded")),
+            body::MULTIPART => Some(Some("multipart/form-data")),
+            _ => None,
+        };
+        let is_get = self.method.get_untracked() == 0;
+        let needs_post = match kind {
+            body::GRAPHQL | body::MULTIPART => true,
+            body::JSON | body::TEXT | body::XML | body::FORM => previous == body::NONE && is_get,
+            _ => false,
+        };
+        if needs_post {
+            self.method.set(METHODS.iter().position(|m| *m == "POST").unwrap_or(1));
+        }
+        if let Some(content_type) = content_type {
+            let next = self.next_row_id(self.headers);
+            self.headers.restructure("content type", Op::Set, 0, |k| {
+                let stale = k
+                    .items()
+                    .iter()
+                    .filter(|h| h.name.eq_ignore_ascii_case("content-type"))
+                    .map(|h| h.id)
+                    .collect::<Vec<_>>();
+                for id in stale {
+                    k.remove(id);
+                }
+                if let Some(value) = content_type {
+                    k.push(PairRow::new(next, true, "Content-Type", value));
+                }
+            });
+        }
+    }
+
+    /// The open request as the editor describes it, over what is stored for everything the
+    /// editor has no field for.
+    fn edited(self, stored: &HttpRequest) -> HttpRequest {
+        let mut request = stored.clone();
+        request.name = self.name.get_untracked();
+        request.method = METHODS[self.method.get_untracked().min(METHODS.len() - 1)].to_string();
+        request.url = self.url.get_untracked();
+        request.url_parameters = rows_of(self.params)
+            .iter()
+            .map(|p| HttpUrlParameter {
+                enabled: p.enabled,
+                name: p.name.clone(),
+                value: p.value.clone(),
+                id: p.stored_id(),
+            })
+            .collect();
+        request.headers = rows_of(self.headers)
+            .iter()
+            .map(|h| HttpRequestHeader {
+                enabled: h.enabled,
+                name: h.name.clone(),
+                value: h.value.clone(),
+                id: h.stored_id(),
+            })
+            .collect();
+        self.write_body(&mut request);
+        self.write_authentication(&mut request);
+        request.setting_follow_redirects =
+            from_tri_state(self.follow_redirects.get_untracked(), &stored.setting_follow_redirects);
+        request.setting_validate_certificates = from_tri_state(
+            self.validate_certificates.get_untracked(),
+            &stored.setting_validate_certificates,
+        );
+        request.setting_send_cookies =
+            from_tri_state(self.send_cookies.get_untracked(), &stored.setting_send_cookies);
+        request.setting_store_cookies =
+            from_tri_state(self.store_cookies.get_untracked(), &stored.setting_store_cookies);
+        match self.http_version.get_untracked() {
+            0 => request.setting_http_version.enabled = false,
+            choice => {
+                request.setting_http_version.enabled = true;
+                request.setting_http_version.value = match choice {
+                    2 => HttpVersion::Http1,
+                    3 => HttpVersion::Http2,
+                    _ => HttpVersion::Auto,
+                };
+            }
+        }
+        // Empty inherits; a number overrides; anything else is a field mid-edit and waits.
+        let timeout = self.timeout.get_untracked();
+        match timeout.trim() {
+            "" => request.setting_request_timeout.enabled = false,
+            typed => {
+                if let Ok(ms) = typed.parse::<i32>()
+                    && ms >= 0
+                {
+                    request.setting_request_timeout.enabled = true;
+                    request.setting_request_timeout.value = ms;
+                }
+            }
+        }
+        request
+    }
+
+    fn write_body(self, request: &mut HttpRequest) {
+        let kind = self.body_kind.get_untracked().min(BODY_TYPES.len() - 1);
+        request.body_type = match (kind, self.foreign_body_type.get_untracked()) {
+            (body::TEXT, Some(foreign)) => Some(foreign),
+            _ => BODY_TYPES[kind].map(String::from),
+        };
+        // Only the open kind's keys are written, with the options Yaak keeps beside them.
+        let kept = |key: &str| request.body.get(key).cloned().map(|v| (key.to_string(), v));
+        let text = |key: &str, value: String| (key.to_string(), Value::String(value));
+        let mut written: BTreeMap<String, Value> = BTreeMap::new();
+        match kind {
+            body::NONE => {}
+            body::FORM | body::MULTIPART => {
+                let fields = rows_of(self.form).iter().map(PairRow::to_form).collect();
+                written.insert("form".to_string(), Value::Array(fields));
+            }
+            body::GRAPHQL => {
+                written.extend([text("query", self.graphql_query.get_untracked())]);
+                let variables = self.graphql_variables.get_untracked();
+                if !variables.is_empty() {
+                    written.extend([text("variables", variables)]);
+                }
+                written.extend(kept("operationName"));
+            }
+            body::BINARY => {
+                let path = self.binary_path.get_untracked();
+                if !path.is_empty() {
+                    written.extend([text("filePath", path)]);
+                }
+            }
+            _ => {
+                written.extend([text("text", self.body.get_untracked())]);
+                written.extend(kept("sendJsonComments"));
+            }
+        }
+        request.body = written;
+    }
+
+    fn write_authentication(self, request: &mut HttpRequest) {
+        let kind = self.auth_kind.get_untracked();
+        match kind {
+            auth::INHERIT => request.authentication_type = None,
+            auth::NONE => request.authentication_type = Some("none".to_string()),
+            auth::BASIC | auth::BEARER | auth::API_KEY => {
+                request.authentication_type =
+                    Some(NATIVE_AUTH_TYPES[kind - auth::BASIC].to_string());
+                let values = &mut request.authentication;
+                match kind {
+                    auth::BASIC => {
+                        store_text(values, "username", self.auth_username.get_untracked(), "");
+                        store_text(values, "password", self.auth_password.get_untracked(), "");
+                    }
+                    auth::BEARER => {
+                        store_text(values, "token", self.auth_token.get_untracked(), "");
+                        store_text(values, "prefix", self.auth_prefix.get_untracked(), "Bearer");
+                    }
+                    _ => {
+                        let location = if self.auth_location.get_untracked() == 1 {
+                            "query"
+                        } else {
+                            "header"
+                        };
+                        store_text(values, "location", location.to_string(), "header");
+                        store_text(values, "key", self.auth_key.get_untracked(), "");
+                        store_text(values, "value", self.auth_value.get_untracked(), "");
+                    }
+                }
+                let disabled = !self.auth_enabled.get_untracked();
+                if (values.get("disabled").and_then(Value::as_bool) == Some(true)) != disabled {
+                    values.insert("disabled".to_string(), Value::Bool(disabled));
+                }
+            }
+            // A plugin's type stays exactly as stored.
+            _ => {}
+        }
+    }
+
+    /// Write the editor's fields over the open request, when they say something new.
     fn save_editor(self) {
         let Some(id) = self.selected.get_untracked() else {
             return;
         };
         let db = engine().db();
-        let Ok(mut request) = db.get_http_request(&id) else {
+        let Ok(stored) = db.get_http_request(&id) else {
             return;
         };
-        request.name = self.name.get_untracked();
-        request.method = METHODS[self.method.get_untracked().min(METHODS.len() - 1)].to_string();
-        request.url = self.url.get_untracked();
-        request.body_type =
-            BODY_TYPES[self.body_kind.get_untracked().min(BODY_TYPES.len() - 1)].map(String::from);
-        let body = self.body.get_untracked();
-        if request.body_type.is_some() {
-            request.body.insert("text".to_string(), serde_json::Value::String(body));
-        } else {
-            request.body.clear();
+        let request = self.edited(&stored);
+        if request == stored {
+            return;
         }
-        request.headers = self.headers.with_untracked(|k| {
-            k.items()
-                .iter()
-                .map(|h| HttpRequestHeader {
-                    enabled: h.enabled,
-                    name: h.name.clone(),
-                    value: h.value.clone(),
-                    id: None,
-                })
-                .collect()
-        });
         let saved = engine()
             .query_manager()
             .with_tx(|tx| tx.upsert_http_request(&request, &engine::update_source()));
@@ -355,6 +960,7 @@ impl Scene {
         if self.selected.get_untracked().as_deref() == Some(id) {
             self.selected.set(None);
             self.response.set(None);
+            self.history.set(Vec::new());
         }
         self.reload_requests();
     }
@@ -365,21 +971,46 @@ impl Scene {
         }
     }
 
-    pub(crate) fn add_header(self) {
-        let id =
-            self.headers.with_untracked(|k| k.items().iter().map(|h| h.id).max().unwrap_or(0)) + 1;
-        self.headers.restructure("add", Op::Insert, id, |k| {
-            k.push(HeaderRow { id, enabled: true, name: String::new(), value: String::new() })
-        });
+    fn next_row_id(self, rows: Rows) -> u64 {
+        rows.with_untracked(|k| k.items().iter().map(|r| r.id).max().unwrap_or(0)) + 1
     }
 
-    pub(crate) fn remove_header(self, id: u64) {
-        self.headers.restructure("remove", Op::Delete, id, |k| {
+    /// A new empty row at the end of `rows` (the headers, the parameters or the form).
+    pub(crate) fn add_row(self, rows: Rows) {
+        let id = self.next_row_id(rows);
+        rows.restructure("add", Op::Insert, id, |k| k.push(PairRow::new(id, true, "", "")));
+    }
+
+    pub(crate) fn remove_row(self, rows: Rows, id: u64) {
+        rows.restructure("remove", Op::Delete, id, |k| {
             k.remove(id);
         });
     }
 
-    /// Send the open request. The engine runs it on its own runtime and the setter brings the
+    /// Ask for a file and hand its path to `picked`. Every platform's picker answers with a
+    /// path the engine can read (https://daybrite.dev/docs/files).
+    fn pick_file(self, picked: impl FnOnce(String) + 'static) {
+        day::task(async move {
+            if let Some(file) = open_file().await
+                && let Some(path) = file.local_path()
+            {
+                picked(path.to_string_lossy().into_owned());
+            }
+        });
+    }
+
+    /// Choose the file a binary body uploads.
+    pub(crate) fn pick_binary(self) {
+        self.pick_file(move |path| self.binary_path.set(path));
+    }
+
+    /// Choose the file a multipart field uploads.
+    pub(crate) fn pick_form_file(self, id: u64) {
+        let form = self.form;
+        self.pick_file(move |path| form.elem(id).file().write_commit(path));
+    }
+
+    /// Send the open request. The engine runs it on its own runtime and the task brings the
     /// outcome back to this thread.
     pub(crate) fn send(self) {
         let Some(id) = self.selected.get_untracked() else {
@@ -390,14 +1021,29 @@ impl Scene {
         }
         // Whatever is typed is sent: the writes-back run on the same turn as the edit.
         self.sending.set(true);
+        self.sending_request.set(Some(id.clone()));
         self.pane.set(1);
-        let (sending, response) = (self.sending, self.response);
         let environment_id = self.environment_id();
         day::task(async move {
-            let sent = engine().send(id, environment_id).await;
-            sending.set(false);
-            response.set(Some(sent));
+            let sent = engine().send(id.clone(), environment_id).await;
+            self.sending.set(false);
+            self.sending_request.set(None);
+            // The response belongs to the request that sent it; a window that has moved on to
+            // another finds it in that request's history.
+            if self.selected.get_untracked().as_deref() == Some(id.as_str()) {
+                self.history.set(engine().history(&id));
+                self.history_applied.set(0);
+                self.history_index.set(0);
+                self.response.set(Some(sent));
+            }
         });
+    }
+
+    /// Stop the send in flight. It resolves with the cancellation as its error.
+    pub(crate) fn cancel(self) {
+        if let Some(id) = self.sending_request.get_untracked() {
+            engine().cancel(&id);
+        }
     }
 
     /// The open request's row, for the window title and the pushed page's bar.

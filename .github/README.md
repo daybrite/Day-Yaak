@@ -15,11 +15,14 @@ additive way.
 ## What the Day client does
 
 - Lists workspaces and their HTTP requests, with folders.
-- Edits a request's method, URL, name, headers, body and environment, writing to Yaak's store as
-  you type.
+- Edits a request's method, URL, name and environment, and in tabs its body (JSON, XML, text,
+  forms, GraphQL, a file), URL parameters, headers, authentication (Basic, Bearer, API key) and
+  send settings, writing to Yaak's store as you type.
 - Sends through `yaak::send`, so variables, inherited headers and authentication, cookies,
   redirects, client certificates and proxies behave as in the desktop app, and the response is
-  stored the same way.
+  stored the same way. A send can be cancelled.
+- Shows the response's body, headers and timeline, with the request's earlier responses in a
+  history menu.
 - On a desktop with Yaak installed, opens the desktop app's own database, the way the `yaak` CLI
   does. On a phone it keeps a store of its own, seeded with Yaak's example workspace.
 
@@ -35,8 +38,10 @@ itself, which holds the send pipeline. The Tauri shell under `crates-tauri/` and
 that is all the Day client is.
 
 Two parts of Yaak stay with the Tauri app for now. The plugin runtime is a Node.js sidecar, so
-template functions, plugin authentication and importers are not available in the Day client; a
-template that calls one says so when sent. And `yaak::send`'s request executor is a private type,
+template functions and importers are not available in the Day client; a template that calls one
+says so when sent. Yaak ships every authentication type as a plugin too, so the Day client
+applies Basic, Bearer and API key itself, through the hook `yaak::send` offers for exactly that
+step, and keeps any other type as stored. And `yaak::send`'s request executor is a private type,
 so the Day client carries a forty-line transcription of it (`apps/yaak-day/src/engine.rs`);
 making the type public upstream would remove the copy.
 

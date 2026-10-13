@@ -7,28 +7,33 @@
 //! synchronously, on whichever thread asks; a send runs on the runtime inside a
 //! `day::spawn_blocking` job, so the UI awaits its outcome like any other future.
 //!
-//! The plugin runtime (a Node.js sidecar) is not started: template functions and plugin-provided
-//! authentication are declined at render time with a clear message, and everything else in a
-//! send, including environment variables, inheritance, cookies and redirects, is Yaak's own code.
+//! The plugin runtime (a Node.js sidecar) is not started. Yaak ships every authentication type as
+//! a plugin, so this module applies the three that need no more than the request itself (Basic,
+//! Bearer and API key) through the pipeline's own hook, with the semantics of Yaak's plugins;
+//! the other types and plugin template functions are declined with a clear message. Everything
+//! else in a send, including environment variables, inheritance, cookies and redirects, is
+//! Yaak's own code.
 
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use async_trait::async_trait;
+use base64::Engine as _;
 use log::{info, warn};
 use tokio::sync::{mpsc, watch};
 use yaak::send::{
-    CookieBehavior, HttpSendRuntimeConfig, ResponseStorage, SendHttpRequestParams,
-    SendRequestExecutor, resolve_send_inputs, send_http_request,
+    CookieBehavior, HttpSendRuntimeConfig, PrepareSendableRequest, ResponseStorage,
+    SendHttpRequestParams, SendRequestExecutor, resolve_send_inputs, send_http_request,
 };
 use yaak_http::client::HttpConnectionOptions;
 use yaak_http::manager::HttpConnectionManager;
 use yaak_http::sender::{HttpResponse as SenderHttpResponse, HttpResponseEvent, ReqwestSender};
 use yaak_http::transaction::HttpTransaction;
-use yaak_http::types::SendableHttpRequest;
+use yaak_http::types::{SendableHttpRequest, append_query_params};
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
-use yaak_models::models::{HttpRequest, HttpResponse};
+use yaak_models::models::{HttpRequest, HttpResponse, HttpResponseEventData};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 use yaak_templates::TemplateCallback;
@@ -41,6 +46,8 @@ const DESKTOP_APP_ID: &str = "app.yaak.desktop";
 const OWN_DIR: &str = "yaak-day";
 /// The most of a response body the UI shows; the rest stays in the file.
 const MAX_BODY_DISPLAY: usize = 512 * 1024;
+/// How many past responses the history picker offers for one request.
+const HISTORY_LIMIT: u64 = 30;
 
 pub struct Engine {
     query_manager: QueryManager,
@@ -48,6 +55,8 @@ pub struct Engine {
     connection_manager: HttpConnectionManager,
     runtime: tokio::runtime::Runtime,
     responses_dir: PathBuf,
+    /// The cancel switch of each send in flight, by request id.
+    cancels: Mutex<HashMap<String, watch::Sender<bool>>>,
     /// Whether the open store is the desktop app's.
     pub shared_with_desktop: bool,
     /// The path of the open store, for the About text.
@@ -99,6 +108,7 @@ impl Engine {
             connection_manager: HttpConnectionManager::new(),
             runtime,
             responses_dir: data_dir.join("responses"),
+            cancels: Mutex::new(HashMap::new()),
             shared_with_desktop,
             data_dir,
         };
@@ -133,25 +143,91 @@ impl Engine {
     /// Send `request_id` with `environment_id` active, on the engine's runtime, and resolve
     /// with the outcome where the caller awaits it (the UI thread, under `day::task`).
     pub async fn send(&'static self, request_id: String, environment_id: Option<String>) -> Sent {
+        let (cancel_tx, cancel_rx) = watch::channel(false);
+        self.cancel_switches().insert(request_id.clone(), cancel_tx);
+        let id = request_id.clone();
         // A blocking job drives the runtime for this one send: `block_on` needs no `Send`
         // bound on the future, which the pipeline's borrowed parameters would not meet.
         let outcome = day::spawn_blocking(move || {
-            self.runtime.block_on(self.send_inner(&request_id, environment_id))
+            self.runtime.block_on(self.send_inner(&id, environment_id, cancel_rx))
         })
         .await;
+        self.cancel_switches().remove(&request_id);
         outcome.unwrap_or_else(|e| Sent::failed(format!("the send did not complete: {e}")))
     }
 
-    /// The last response stored for a request, as the UI shows one, read off the UI thread:
-    /// the body file can be hundreds of kilobytes.
-    pub async fn last_response_async(&'static self, request_id: String) -> Option<Sent> {
-        day::spawn_blocking(move || self.last_response(&request_id))
-            .await
-            .ok()
-            .flatten()
+    /// Stop the send in flight for `request_id`, if there is one. The send resolves as usual,
+    /// with the cancellation as its error.
+    pub fn cancel(&self, request_id: &str) {
+        if let Some(switch) = self.cancel_switches().get(request_id) {
+            let _ = switch.send(true);
+        }
     }
 
-    async fn send_inner(&self, request_id: &str, environment_id: Option<String>) -> Sent {
+    fn cancel_switches(&self) -> std::sync::MutexGuard<'_, HashMap<String, watch::Sender<bool>>> {
+        // A panic while holding the lock leaves the map itself intact.
+        self.cancels.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// One stored response as the UI shows it, read off the UI thread: the body file can be
+    /// hundreds of kilobytes. `None` asks for the request's latest.
+    pub async fn response_async(
+        &'static self,
+        request_id: String,
+        response_id: Option<String>,
+    ) -> Option<Sent> {
+        day::spawn_blocking(move || match response_id {
+            Some(id) => self.db().get_http_response(&id).ok().map(|r| self.sent(&r)),
+            None => self.last_response(&request_id),
+        })
+        .await
+        .ok()
+        .flatten()
+    }
+
+    /// The request's past responses, newest first, as the history picker lists them.
+    pub fn history(&self, request_id: &str) -> Vec<ResponseSummary> {
+        self.db()
+            .list_http_responses_for_request(request_id, Some(HISTORY_LIMIT))
+            .unwrap_or_default()
+            .iter()
+            .map(ResponseSummary::from_response)
+            .collect()
+    }
+
+    /// Forget every stored response of a request, with their body files.
+    pub fn clear_history(&self, request_id: &str) {
+        let responses =
+            self.db().list_http_responses_for_request(request_id, None).unwrap_or_default();
+        for response in responses {
+            let deleted = self.query_manager.with_tx(|tx| {
+                tx.delete_http_response(&response, &update_source(), &self.blob_manager)
+            });
+            if let Err(e) = deleted {
+                warn!("cannot delete a response: {e}");
+            }
+        }
+    }
+
+    /// A stored response with its body and timeline read back.
+    fn sent(&self, response: &HttpResponse) -> Sent {
+        let mut sent = Sent::from_response(response);
+        sent.timeline = self
+            .db()
+            .list_http_response_events(&response.id)
+            .unwrap_or_default()
+            .iter()
+            .map(|e| TimelineRow::from_event(&e.event))
+            .collect();
+        sent
+    }
+
+    async fn send_inner(
+        &self,
+        request_id: &str,
+        environment_id: Option<String>,
+        cancel_rx: watch::Receiver<bool>,
+    ) -> Sent {
         let request = match self.db().get_http_request(request_id) {
             Ok(r) => r,
             Err(e) => return Sent::failed(format!("cannot load the request: {e}")),
@@ -184,7 +260,10 @@ impl Engine {
         let executor = Executor {
             connection_manager: &self.connection_manager,
             runtime_config: inputs.runtime_config.clone(),
+            cancel_rx: cancel_rx.clone(),
         };
+        // What the store held before, to tell this send's own failure record from an older one.
+        let before = self.latest_response_id(request_id);
         let result = send_http_request(SendHttpRequestParams {
             inputs,
             template_callback: &NoPlugins,
@@ -196,9 +275,9 @@ impl Engine {
             }),
             emit_events_to: None,
             emit_response_body_chunks_to: None,
-            cancelled_rx: None,
+            cancelled_rx: Some(cancel_rx),
             existing_response: None,
-            prepare_sendable_request: None,
+            prepare_sendable_request: Some(&NativeAuth),
             executor: &executor,
         })
         .await;
@@ -210,9 +289,35 @@ impl Engine {
             warn!("cannot persist cookies: {e}");
         }
         match result {
-            Ok(result) => Sent::from_response(&result.response),
-            Err(e) => Sent::failed(e.to_string()),
+            Ok(result) => self.sent(&result.response),
+            Err(e) => {
+                // A send that failed on the wire left a response behind, with the timeline up
+                // to the failure; one that failed before that (a template, a missing file) did
+                // not.
+                let stored = self
+                    .db()
+                    .list_http_responses_for_request(request_id, Some(1))
+                    .ok()
+                    .and_then(|r| r.into_iter().next())
+                    .filter(|r| Some(&r.id) != before.as_ref());
+                match stored {
+                    Some(response) => {
+                        let mut sent = self.sent(&response);
+                        sent.error.get_or_insert(e.to_string());
+                        sent
+                    }
+                    None => Sent::failed(e.to_string()),
+                }
+            }
         }
+    }
+
+    fn latest_response_id(&self, request_id: &str) -> Option<String> {
+        self.db()
+            .list_http_responses_for_request(request_id, Some(1))
+            .ok()
+            .and_then(|r| r.into_iter().next())
+            .map(|r| r.id)
     }
 
     /// The last response stored for a request, as the UI shows one.
@@ -221,7 +326,7 @@ impl Engine {
             .list_http_responses_for_request(request_id, Some(1))
             .ok()
             .and_then(|r| r.into_iter().next())
-            .map(|r| Sent::from_response(&r))
+            .map(|r| self.sent(&r))
     }
 }
 
@@ -274,11 +379,85 @@ impl TemplateCallback for NoPlugins {
     }
 }
 
+/// The authentication types this client applies itself, as the request stores them.
+pub const NATIVE_AUTH_TYPES: [&str; 3] = ["basic", "bearer", "apikey"];
+
+/// The pipeline's authentication hook, without a plugin runtime behind it.
+struct NativeAuth;
+
+#[async_trait]
+impl PrepareSendableRequest for NativeAuth {
+    async fn prepare_sendable_request(
+        &self,
+        rendered_request: &HttpRequest,
+        _auth_context_id: &str,
+        sendable_request: &mut SendableHttpRequest,
+    ) -> Result<(), String> {
+        apply_native_auth(
+            rendered_request.authentication_type.as_deref(),
+            &rendered_request.authentication,
+            sendable_request,
+        )
+    }
+}
+
+/// Apply a request's (already inherited and rendered) authentication to what goes on the wire.
+/// Each arm follows the Yaak plugin of the same name (`plugins/auth-basic`, `auth-bearer`,
+/// `auth-apikey`), including the defaults the plugin runtime fills in for a value never set.
+fn apply_native_auth(
+    kind: Option<&str>,
+    values: &BTreeMap<String, serde_json::Value>,
+    sendable: &mut SendableHttpRequest,
+) -> Result<(), String> {
+    let Some(kind) = kind.filter(|k| *k != "none") else {
+        return Ok(());
+    };
+    // The editor's "enabled" switch, stored inverted beside the values.
+    if values.get("disabled").and_then(|v| v.as_bool()) == Some(true) {
+        return Ok(());
+    }
+    let text = |key: &str, default: &str| match values.get(key) {
+        None | Some(serde_json::Value::Null) => default.to_string(),
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(other) => other.to_string(),
+    };
+    match kind {
+        "basic" => {
+            let pair = format!("{}:{}", text("username", ""), text("password", ""));
+            let encoded = base64::engine::general_purpose::STANDARD.encode(pair);
+            sendable.insert_header(("Authorization".into(), format!("Basic {encoded}")));
+        }
+        "bearer" => {
+            let (prefix, token) = (text("prefix", "Bearer"), text("token", ""));
+            let value = format!("{} {}", prefix.trim(), token.trim()).trim().to_string();
+            sendable.insert_header(("Authorization".into(), value));
+        }
+        "apikey" => {
+            let (key, value) = (text("key", ""), text("value", ""));
+            if key.is_empty() {
+                return Ok(());
+            }
+            if text("location", "header") == "query" {
+                sendable.url = append_query_params(&sendable.url, vec![(key, value)]);
+            } else {
+                sendable.insert_header((key, value));
+            }
+        }
+        other => {
+            return Err(format!(
+                "{other} authentication needs Yaak's plugin runtime, which this client does not run"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The send executor over Yaak's connection manager: the one the desktop and the CLI use
 /// (`yaak::send`'s own, which is private to that crate), transcribed.
 struct Executor<'a> {
     connection_manager: &'a HttpConnectionManager,
     runtime_config: HttpSendRuntimeConfig,
+    cancel_rx: watch::Receiver<bool>,
 }
 
 #[async_trait]
@@ -315,22 +494,112 @@ impl SendRequestExecutor for Executor<'_> {
             ),
             None => HttpTransaction::new(sender),
         };
-        let (_cancel_tx, cancel_rx) = watch::channel(false);
-        let result =
-            transaction.execute_with_cancellation(sendable_request, cancel_rx, event_tx).await;
+        let result = transaction
+            .execute_with_cancellation(sendable_request, self.cancel_rx.clone(), event_tx)
+            .await;
         cached_client.resolver.set_event_sender(None).await;
         result
+    }
+}
+
+/// One line of a response's timeline, in curl's notation: `>` sent, `<` received, `*` a note.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimelineRow {
+    pub mark: char,
+    pub text: String,
+}
+
+impl TimelineRow {
+    fn from_event(event: &HttpResponseEventData) -> TimelineRow {
+        use HttpResponseEventData as E;
+        let (mark, text) = match event {
+            E::SendUrl { method, path, query, fragment, .. } => {
+                let query = if query.is_empty() { String::new() } else { format!("?{query}") };
+                let fragment =
+                    if fragment.is_empty() { String::new() } else { format!("#{fragment}") };
+                ('>', format!("{method} {path}{query}{fragment}"))
+            }
+            E::ReceiveUrl { version, status } => ('<', format!("{version} {status}")),
+            E::HeaderUp { name, value } => ('>', format!("{name}: {value}")),
+            E::HeaderDown { name, value } => ('<', format!("{name}: {value}")),
+            E::Redirect { url, status, .. } => ('*', format!("Redirect {status} → {url}")),
+            E::Setting { name, value, .. } => ('*', format!("Setting {name}={value}")),
+            E::Info { message } => ('*', message.clone()),
+            E::ChunkSent { bytes } => ('*', format!("[{} sent]", size_text(*bytes as u64))),
+            E::ChunkReceived { bytes } => ('*', format!("[{} received]", size_text(*bytes as u64))),
+            E::DnsResolved { hostname, addresses, duration, overridden } => {
+                let addresses = addresses.join(", ");
+                if *overridden {
+                    ('*', format!("DNS override {hostname} → {addresses}"))
+                } else {
+                    ('*', format!("DNS resolved {hostname} to {addresses} ({duration} ms)"))
+                }
+            }
+        };
+        TimelineRow { mark, text }
+    }
+}
+
+/// A byte count as the UI writes one.
+pub fn size_text(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// When a stored model was created, as a local clock time.
+fn clock_text(created_at: &chrono::NaiveDateTime) -> String {
+    use chrono::TimeZone;
+    chrono::Local.from_utc_datetime(created_at).format("%H:%M:%S").to_string()
+}
+
+/// One past response, as the history picker names it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ResponseSummary {
+    pub id: String,
+    pub status: i32,
+    pub status_reason: String,
+    pub failed: bool,
+    pub elapsed_ms: i32,
+    /// The local clock time it was sent at.
+    pub sent_at: String,
+}
+
+impl ResponseSummary {
+    fn from_response(r: &HttpResponse) -> ResponseSummary {
+        ResponseSummary {
+            id: r.id.clone(),
+            status: r.status,
+            status_reason: r.status_reason.clone().unwrap_or_default(),
+            failed: r.error.is_some() || r.status == 0,
+            elapsed_ms: r.elapsed,
+            sent_at: clock_text(&r.created_at),
+        }
     }
 }
 
 /// A response as the UI shows it: the stored model's facts, plus its body read back.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sent {
+    /// The stored response's id; empty for a send that failed before one was stored.
+    pub id: String,
     pub status: i32,
     pub status_reason: String,
     pub elapsed_ms: i32,
+    /// Time to the response headers, and the share of it spent resolving the host.
+    pub elapsed_headers_ms: i32,
+    pub elapsed_dns_ms: i32,
     pub url: String,
+    pub version: String,
+    pub remote_addr: String,
     pub headers: Vec<(String, String)>,
+    /// The headers as they went out, with authentication and cookies applied.
+    pub request_headers: Vec<(String, String)>,
+    pub timeline: Vec<TimelineRow>,
     pub error: Option<String>,
     pub content_type: Option<String>,
     /// The body as text, pretty-printed when it is JSON; empty for a binary body.
@@ -342,11 +611,18 @@ pub struct Sent {
 impl Sent {
     fn failed(error: String) -> Sent {
         Sent {
+            id: String::new(),
             status: 0,
             status_reason: String::new(),
             elapsed_ms: 0,
+            elapsed_headers_ms: 0,
+            elapsed_dns_ms: 0,
             url: String::new(),
+            version: String::new(),
+            remote_addr: String::new(),
             headers: Vec::new(),
+            request_headers: Vec::new(),
+            timeline: Vec::new(),
             error: Some(error),
             content_type: None,
             body: String::new(),
@@ -365,12 +641,22 @@ impl Sent {
             Some(path) => read_body(Path::new(path), content_type.as_deref()),
             None => (String::new(), 0, false),
         };
+        let pairs = |headers: &[yaak_models::models::HttpResponseHeader]| {
+            headers.iter().map(|h| (h.name.clone(), h.value.clone())).collect::<Vec<_>>()
+        };
         Sent {
+            id: r.id.clone(),
             status: r.status,
             status_reason: r.status_reason.clone().unwrap_or_default(),
             elapsed_ms: r.elapsed,
+            elapsed_headers_ms: r.elapsed_headers,
+            elapsed_dns_ms: r.elapsed_dns,
             url: r.url.clone(),
-            headers: r.headers.iter().map(|h| (h.name.clone(), h.value.clone())).collect(),
+            version: r.version.clone().unwrap_or_default(),
+            remote_addr: r.remote_addr.clone().unwrap_or_default(),
+            headers: pairs(&r.headers),
+            request_headers: pairs(&r.request_headers),
+            timeline: Vec::new(),
             error: r.error.clone(),
             content_type,
             body,
@@ -420,5 +706,118 @@ pub fn blank_request(
         name: String::new(),
         sort_priority,
         ..HttpRequest::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn request(url: &str) -> SendableHttpRequest {
+        SendableHttpRequest {
+            url: url.to_string(),
+            method: "GET".to_string(),
+            headers: vec![("Accept".to_string(), "*/*".to_string())],
+            body: None,
+            options: Default::default(),
+        }
+    }
+
+    fn values(v: serde_json::Value) -> BTreeMap<String, serde_json::Value> {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn header<'a>(r: &'a SendableHttpRequest, name: &str) -> Option<&'a str> {
+        r.headers.iter().find(|h| h.0.eq_ignore_ascii_case(name)).map(|h| h.1.as_str())
+    }
+
+    #[test]
+    fn basic_encodes_the_pair_and_tolerates_missing_values() {
+        let mut r = request("https://example.com");
+        let v = values(json!({"username": "aladdin", "password": "open sesame"}));
+        apply_native_auth(Some("basic"), &v, &mut r).unwrap();
+        assert_eq!(header(&r, "authorization"), Some("Basic YWxhZGRpbjpvcGVuIHNlc2FtZQ=="));
+
+        let mut r = request("https://example.com");
+        apply_native_auth(Some("basic"), &values(json!({})), &mut r).unwrap();
+        assert_eq!(header(&r, "authorization"), Some("Basic Og=="));
+    }
+
+    #[test]
+    fn bearer_defaults_its_prefix_and_honors_an_emptied_one() {
+        let mut r = request("https://example.com");
+        apply_native_auth(Some("bearer"), &values(json!({"token": " abc "})), &mut r).unwrap();
+        assert_eq!(header(&r, "authorization"), Some("Bearer abc"));
+
+        let mut r = request("https://example.com");
+        let v = values(json!({"token": "abc", "prefix": ""}));
+        apply_native_auth(Some("bearer"), &v, &mut r).unwrap();
+        assert_eq!(header(&r, "authorization"), Some("abc"));
+
+        let mut r = request("https://example.com");
+        let v = values(json!({"token": "abc", "prefix": "Token"}));
+        apply_native_auth(Some("bearer"), &v, &mut r).unwrap();
+        assert_eq!(header(&r, "authorization"), Some("Token abc"));
+    }
+
+    #[test]
+    fn an_api_key_goes_in_a_header_or_the_query() {
+        let mut r = request("https://example.com/a?x=1");
+        let v = values(json!({"key": "X-Api-Key", "value": "s3cret"}));
+        apply_native_auth(Some("apikey"), &v, &mut r).unwrap();
+        assert_eq!(header(&r, "x-api-key"), Some("s3cret"));
+        assert_eq!(r.url, "https://example.com/a?x=1");
+
+        let mut r = request("https://example.com/a?x=1");
+        let v = values(json!({"location": "query", "key": "api key", "value": "a&b"}));
+        apply_native_auth(Some("apikey"), &v, &mut r).unwrap();
+        assert_eq!(r.url, "https://example.com/a?x=1&api%20key=a%26b");
+        assert_eq!(r.headers.len(), 1);
+    }
+
+    #[test]
+    fn nothing_is_applied_for_none_inherited_nothing_or_a_disabled_type() {
+        for (kind, v) in [
+            (None, json!({"token": "abc"})),
+            (Some("none"), json!({"token": "abc"})),
+            (Some("bearer"), json!({"token": "abc", "disabled": true})),
+            (Some("apikey"), json!({"value": "abc"})),
+        ] {
+            let mut r = request("https://example.com");
+            apply_native_auth(kind, &values(v), &mut r).unwrap();
+            assert_eq!(r.headers.len(), 1, "{kind:?}");
+            assert_eq!(r.url, "https://example.com");
+        }
+    }
+
+    #[test]
+    fn a_plugin_only_type_is_refused_by_name() {
+        let mut r = request("https://example.com");
+        let error = apply_native_auth(Some("oauth2"), &values(json!({})), &mut r).unwrap_err();
+        assert!(error.starts_with("oauth2 authentication needs"), "{error}");
+        assert_eq!(r.headers.len(), 1);
+    }
+
+    #[test]
+    fn timeline_rows_read_like_curl() {
+        use HttpResponseEventData as E;
+        let row = |e| TimelineRow::from_event(&e);
+        let sent = row(E::SendUrl {
+            method: "GET".into(),
+            scheme: "https".into(),
+            username: String::new(),
+            password: String::new(),
+            host: "example.com".into(),
+            port: 443,
+            path: "/a".into(),
+            query: "x=1".into(),
+            fragment: String::new(),
+        });
+        assert_eq!((sent.mark, sent.text.as_str()), ('>', "GET /a?x=1"));
+        let down = row(E::HeaderDown { name: "Server".into(), value: "day".into() });
+        assert_eq!((down.mark, down.text.as_str()), ('<', "Server: day"));
+        let chunk = row(E::ChunkReceived { bytes: 2048 });
+        assert_eq!((chunk.mark, chunk.text.as_str()), ('*', "[2.0 KB received]"));
     }
 }

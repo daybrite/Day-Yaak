@@ -32,13 +32,13 @@ short = "Yaak's API client with a native interface on desktop and mobile."
 description = """
 Yaak is an API client for REST. This app is Yaak's engine with an interface built from each platform's native controls, on a desktop and on a phone.
 
-Open your workspaces, edit a request's method, URL, headers, body and environment, and send it. Environment variables, inherited headers and authentication, cookies, redirects, client certificates and proxies behave as in the Yaak desktop app. On a desktop with Yaak installed, the app opens the desktop app's own workspaces; on a phone it keeps workspaces of its own.
+Open your workspaces, edit a request's method, URL, parameters, headers, body, authentication and environment, and send it. Bodies can be JSON, XML, text, a form, a GraphQL query or a file, and authentication can be Basic, a Bearer token or an API key. The response shows its body, headers and a timeline of the send, and earlier responses stay in the request's history. Environment variables, inherited headers and authentication, cookies, redirects, client certificates and proxies behave as in the Yaak desktop app. On a desktop with Yaak installed, the app opens the desktop app's own workspaces; on a phone it keeps workspaces of its own.
 
-Not included yet: gRPC, WebSocket and server-sent event requests, and template functions, authentication types and importers that come from Yaak plugins.
+Not included yet: gRPC, WebSocket and server-sent event requests, and the template functions, importers and further authentication types (such as OAuth) that come from Yaak plugins.
 """
 keywords = ["api", "rest", "http", "client", "developer", "yaak"]
 release-notes = """
-First release of the Day client: workspaces, HTTP requests, headers, bodies, environments and sending.
+First release of the Day client: workspaces, HTTP requests with their parameters, headers, bodies and authentication, environments, sending, and each response's body, headers, timeline and history.
 """
 privacy-url = "https://github.com/daybrite/Day-Yaak"   # the App Store requires one
 marketing-url = "https://daybrite.github.io/Day-Yaak"
