@@ -116,7 +116,7 @@ flow:
   - select: { id: set-redirects, index: 2 }
   - input: { id: set-timeout, text: "5000" }
   - wait_idle: {}
-  - screenshot: settings
+  - screenshot: request-settings
   - select: { id: request-tab, index: 0 }
   - wait_idle: {}
 
@@ -141,3 +141,19 @@ flow:
   - wait_idle: {}
   - size_class: { width: auto }
   - wait_idle: {}
+
+  # Settings (https://daybrite.dev/docs/settings): the window the App menu opens on a desktop,
+  # where a group's own id routes to its tab; the nav's Settings row on a phone, where
+  # `settings/<group>` pushes the group's page. The Data group says which store this client
+  # opened and where it lives.
+  - navigate: { route: general, skip_on: [uikit, mdc, arkui, dom] }
+  - navigate: { route: settings/general, only_on: [uikit, mdc, arkui, dom] }
+  - wait_for: { id: language-picker }
+  - screenshot: { name: settings, window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
+  - screenshot: { name: settings, only_on: [uikit, mdc, arkui, dom] }
+  - navigate: { route: data, skip_on: [uikit, mdc, arkui, dom] }
+  - navigate: { route: settings/data, only_on: [uikit, mdc, arkui, dom] }
+  - wait_for: { id: data-dir }
+  - screenshot: { name: settings-data, window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
+  - screenshot: { name: settings-data, only_on: [uikit, mdc, arkui, dom] }
+  - close_window: { window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }

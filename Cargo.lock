@@ -12150,3 +12150,15 @@ dependencies = [
  "syn 2.0.119",
  "winnow 0.7.10",
 ]
+
+[[patch.unused]]
+name = "day-persistence"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "day-persistence-macros"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "day-sqlite-worker"
+version = "0.1.0"

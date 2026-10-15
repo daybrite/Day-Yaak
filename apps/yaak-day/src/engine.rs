@@ -59,7 +59,7 @@ pub struct Engine {
     cancels: Mutex<HashMap<String, watch::Sender<bool>>>,
     /// Whether the open store is the desktop app's.
     pub shared_with_desktop: bool,
-    /// The path of the open store, for the About text.
+    /// The path of the open store, for Settings.
     pub data_dir: PathBuf,
 }
 

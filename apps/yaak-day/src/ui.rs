@@ -8,6 +8,7 @@ use crate::model::{
 };
 use crate::res;
 use day::prelude::*;
+use day_piece_settings::prelude::*;
 use day_piece_texteditor::highlight::{Language, Palette, highlight_with_templates, highlighter};
 use day_piece_texteditor::text_editor_text;
 
@@ -917,37 +918,19 @@ fn response_timeline(rows: Vec<TimelineRow>) -> impl Piece {
 
 // ---- settings ---------------------------------------------------------------------------------
 
-/// Appearance and language, from `day-piece-settings`, and where the data lives.
-pub(crate) fn settings_body() -> impl Piece {
+/// The Data group of Settings (https://daybrite.dev/docs/settings): which store this client
+/// opened, the desktop app's or its own, and where it lives. Appearance and language are Day's
+/// own General group (lib.rs).
+pub(crate) fn data_group() -> Group {
     let engine = crate::engine::engine();
-    let store = if engine.shared_with_desktop {
-        res::str::store_shared().format()
-    } else {
-        res::str::store_own().format()
-    };
-    column((
-        form((day_piece_settings::settings_sections(
-            crate::THEME_KEY,
-            crate::LOCALE_KEY,
-            res::locales::ALL,
-        ),)),
-        label(store).font(Font::Footnote).secondary().padding(12.0).id("store-note"),
-        label(engine.data_dir.display().to_string())
-            .font(Font::Caption)
-            .secondary()
-            .selectable()
-            .padding(Insets { top: 0.0, leading: 12.0, bottom: 12.0, trailing: 12.0 }),
-    ))
-    .align(HAlign::Leading)
-}
-
-/// The same body as a nav section, for the platforms with no menu bar.
-pub(crate) fn settings_page() -> impl Piece {
-    column((
-        label(res::str::nav_settings()).font(Font::Title).id("settings-title"),
-        settings_body(),
-    ))
-    .spacing(12.0)
-    .align(HAlign::Leading)
-    .padding(16.0)
+    let store =
+        if engine.shared_with_desktop { res::str::store_shared() } else { res::str::store_own() };
+    Group::new("data", res::str::settings_data())
+        .icon(Symbol::Folder)
+        .row(rows::info(res::str::store(), store).id("store"))
+        .row(
+            rows::info(res::str::data_dir(), engine.data_dir.display().to_string())
+                .copyable()
+                .id("data-dir"),
+        )
 }

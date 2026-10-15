@@ -46,7 +46,8 @@ On a desktop with Yaak installed, the client opens the desktop app's own store
 set, it keeps a store of its own and seeds it with Yaak's example workspace on first launch.
 
 Opening the desktop store applies this checkout's database migrations to it, as the CLI would:
-keep the fork near the version of Yaak you run.
+keep the fork near the version of Yaak you run. Settings ▸ Data says which store is open and
+where it lives.
 
 ## Run it
 
@@ -75,8 +76,9 @@ day launch -t macos-appkit --script dayscript/send-local.yaml
   client applies itself, through the pipeline's own hook, with their unit tests.
 - `src/model.rs` — the per-window scene: selection, the editor's bindings and their write-back,
   the response on show and the request's history.
-- `src/ui.rs` — the request list, the tabbed editor, the response's views, Settings.
-- `src/lib.rs` — the window: the nav host and the menu bar.
+- `src/ui.rs` — the request list, the tabbed editor, the response's views, the Data group of
+  Settings.
+- `src/lib.rs` — the window: the nav host, the menu bar, and the Settings and About declaration.
 - `dayscript/` — walkthroughs; `.github/workflows/day.yml` at the repository root runs
   `demo.yaml` on every target through the shared Day workflow. `echo-server.py` and
   `data/upload.txt` serve `send-local.yaml`.

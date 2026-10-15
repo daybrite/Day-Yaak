@@ -3,6 +3,7 @@
 //! opens the first window; `window_shell` builds one window's UI.
 
 use day::prelude::*;
+use day_piece_settings::prelude::*;
 
 mod engine;
 mod model;
@@ -29,34 +30,36 @@ pub fn window() -> day::WindowOptions {
 // Typed names for everything under `resource/` (https://daybrite.dev/docs/resources).
 day::resources!();
 
-/// The `day::prefs` keys the Settings page writes and startup reads.
-const THEME_KEY: &str = "app.theme";
-const LOCALE_KEY: &str = "app.locale";
 /// The nav key of the Settings row, where there is no menu bar to hold Settings.
 pub(crate) const SETTINGS: &str = "settings";
-
-/// True where there is a menu bar, so Settings lives in the App menu instead of the nav.
-pub(crate) fn has_menu_bar() -> bool {
-    capability(Cap::AppMenu) != Support::Unsupported
-}
 
 /// One-time app setup, then the first window's content.
 pub fn root() -> impl Piece {
     info!("Yaak for Day starting");
-    day_piece_settings::apply_startup(THEME_KEY, LOCALE_KEY);
     // Open the store before the first window, so a failure shows up at launch.
     let _ = engine::engine();
+    // Settings and About (https://daybrite.dev/docs/settings): appearance and language from
+    // Day's catalog, the Data group (ui.rs), the app's name and version from Day.toml. A
+    // desktop gets the App menu's Settings… and About items and their windows; a phone the
+    // Settings row of the navigation in `window_shell`.
+    let prefs = Preferences::new()
+        .about(About::from_manifest().link(day::tr("day-about-website"), "https://yaak.app"))
+        .group(general_group(res::locales::ALL))
+        .group(ui::data_group())
+        .install();
 
-    day::register_preferences(ui::settings_body);
-    day::register_new_window(window_shell);
+    day::register_new_window({
+        let prefs = prefs.clone();
+        move || window_shell(prefs.clone())
+    });
     app_menu(menus());
 
-    window_shell()
+    window_shell(prefs)
 }
 
 /// One window's UI, for the first window and every File ▸ New Window. Each window has its own
 /// scene, so two windows can show two workspaces.
-fn window_shell() -> impl Piece {
+fn window_shell(prefs: Prefs) -> impl Piece {
     Scene::scoped(move |scene| {
         scene.install();
         day::window_title(move || match scene.selected_row() {
@@ -81,13 +84,18 @@ fn window_shell() -> impl Piece {
                 move || scene.workspaces.get(),
                 |w: &yaak_models::models::Workspace| item(w.id.clone(), w.name.clone()),
             )
+            // Use the desktop's App menu Settings… item; without a menu bar, keep Settings
+            // reachable as a navigation row (https://daybrite.dev/docs/settings).
             .items(
-                move || if has_menu_bar() { Vec::new() } else { vec![SETTINGS.to_string()] },
+                {
+                    let prefs = prefs.clone();
+                    move || prefs.nav_keys(SETTINGS.to_string())
+                },
                 |k: &String| item(k.clone(), res::str::nav_settings()),
             )
-            .destination(|k: &Option<String>| {
+            .destination(move |k: &Option<String>| {
                 if k.as_deref() == Some(SETTINGS) {
-                    Either::Left(ui::settings_page())
+                    Either::Left(prefs.page())
                 } else {
                     Either::Right(ui::request_page())
                 }

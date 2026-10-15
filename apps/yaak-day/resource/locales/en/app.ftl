@@ -117,5 +117,9 @@ timeline_none = This response has no recorded timeline.
 body_truncated = (The body is longer than shown here.)
 body_binary = (A binary body.)
 
-store_shared = Showing the Yaak desktop app's workspaces.
-store_own = This client's own workspaces.
+# Settings ▸ Data: which store the client opened, and where it lives.
+settings_data = Data
+store = Store
+store_shared = Shared with the Yaak desktop app
+store_own = This client's own
+data_dir = Data directory

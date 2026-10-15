@@ -912,12 +912,19 @@ dependencies = [
 name = "day-piece-settings"
 version = "0.5.1"
 dependencies = [
+ "cc",
+ "day-build",
  "day-core",
  "day-fluent",
+ "day-l10n",
+ "day-part-clipboard",
  "day-part-prefs",
  "day-pieces",
  "day-reactive",
  "day-spec",
+ "day-toolchain",
+ "linkme",
+ "log",
 ]
 
 [[package]]
