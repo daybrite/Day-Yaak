@@ -683,6 +683,7 @@ version = "0.5.1"
 dependencies = [
  "day-core",
  "day-pieces",
+ "day-reactive",
  "day-spec",
  "jni 0.22.4",
  "linkme",
@@ -779,6 +780,7 @@ version = "0.5.1"
 dependencies = [
  "day-core",
  "day-geometry",
+ "day-l10n",
  "day-spec",
  "getrandom 0.4.3",
  "log",
@@ -5819,3 +5821,15 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "day-persistence"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "day-persistence-macros"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "day-sqlite-worker"
+version = "0.1.0"
