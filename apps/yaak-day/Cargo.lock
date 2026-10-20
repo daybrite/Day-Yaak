@@ -700,6 +700,7 @@ name = "day-android"
 version = "0.5.1"
 dependencies = [
  "day-core",
+ "day-macros",
  "day-pieces",
  "day-reactive",
  "day-spec",
@@ -748,6 +749,7 @@ dependencies = [
  "napi-ohos",
  "ohos-sys",
  "ohos-sys-opaque-types",
+ "serde_json",
 ]
 
 [[package]]
@@ -759,6 +761,7 @@ name = "day-bridge"
 version = "0.5.1"
 dependencies = [
  "day-async",
+ "day-macros",
  "day-spec",
 ]
 
@@ -840,6 +843,7 @@ dependencies = [
  "objc2-core-graphics",
  "objc2-foundation",
  "pangocairo",
+ "pkg-config",
  "windows",
 ]
 
@@ -900,6 +904,7 @@ version = "0.5.1"
 dependencies = [
  "base64 0.23.1",
  "day-android",
+ "day-async",
  "day-bridge",
  "day-build",
  "objc2",
@@ -968,6 +973,7 @@ dependencies = [
  "day-core",
  "day-geometry",
  "day-l10n",
+ "day-macros",
  "day-model",
  "day-reactive",
  "day-spec",

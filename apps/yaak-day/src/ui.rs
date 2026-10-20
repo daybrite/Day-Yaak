@@ -55,13 +55,14 @@ fn request_list(scene: Scene) -> impl Piece {
     })
     .selected_rows(move || scene.selected_index().into_iter().collect())
     .scroll_to_row(scene.scroll_to)
-    .deletable(true)
-    .delete_label(res::str::cmd_delete().format())
-    .on_delete(move |index| {
-        if let Some(row) = scene.requests.get_untracked().get(index) {
-            scene.delete_request(&row.id);
-        }
-    })
+    .deletable(
+        Delete::new(move |index| {
+            if let Some(row) = scene.requests.get_untracked().get(index) {
+                scene.delete_request(&row.id);
+            }
+        })
+        .label(res::str::cmd_delete()),
+    )
     .id("request-list")
 }
 
@@ -86,10 +87,10 @@ fn request_row(scene: Scene, slot: ItemSlot<RequestRow, String>) -> impl Piece {
         .align(HAlign::Leading)
         .grow(),
     ))
-    .spacing(8.0)
+    .spacing(Space::S)
     .align(VAlign::Center)
-    .padding(Insets { top: 6.0, leading: 12.0, bottom: 6.0, trailing: 12.0 })
-    .context_menu(vec![menu_item(res::str::cmd_delete().format()).action(move || {
+    .padding(Insets::symmetric(12.0, 6.0))
+    .context_menu([menu_item(res::str::cmd_delete()).action(move || {
         scene.delete_request(&slot.get().id);
     })])
 }
@@ -106,6 +107,18 @@ pub(crate) fn method_color(method: &str) -> Color {
     }
 }
 
+/// A picker's options over one of the model's tables, by position: the model keeps each choice
+/// as an index into its table (`body::JSON`, `auth::BEARER`, …), and the titles are the keys'
+/// localized text.
+fn indexed(keys: &'static [&'static str]) -> Vec<(usize, LocalizedText)> {
+    keys.iter().enumerate().map(|(i, k)| (i, tr(k))).collect()
+}
+
+/// As [`indexed`], for a table whose entries are their own titles (the HTTP methods).
+fn indexed_titles(titles: &'static [&'static str]) -> Vec<(usize, &'static str)> {
+    titles.iter().copied().enumerate().collect()
+}
+
 // ---- the editor and the response ----------------------------------------------------------------
 
 /// The detail: the open request's editor and its response, or the empty state. A wide window
@@ -114,15 +127,9 @@ pub(crate) fn request_page() -> impl Piece {
     let scene = Scene::ambient();
     column((
         when(move || scene.selected.get().is_none(), move || empty_state(scene)),
-        // `each` over a zero-or-one list, so the editor is rebuilt per request with its own
-        // scope and bindings.
-        each(
-            items(
-                move || scene.selected.get().into_iter().collect::<Vec<String>>(),
-                |id: &String| id.clone(),
-            ),
-            move |_slot: ItemSlot<String, String>| editor(scene),
-        ),
+        // Keyed by the open request, so the editor is rebuilt per request with its own scope
+        // and bindings.
+        keyed(move || scene.selected.get(), move |_| editor(scene)),
     ))
     .grow()
     // Derived, not fixed: the layout button's glyph shows the arrangement a press gives, so
@@ -143,13 +150,13 @@ pub(crate) fn request_page() -> impl Piece {
                 } else {
                     res::str::cmd_layout_stack()
                 })
-                .enabled_when(move || scene.selected.get().is_some())
+                .enabled(move || scene.selected.get().is_some())
                 .action(move || scene.stacked.update(|s| *s = !*s)),
             toolbar_button("tb-send", res::str::cmd_send())
                 .image(res::vectors::send)
                 .tooltip(res::str::cmd_send())
                 .placement(ToolbarPlacement::Primary)
-                .enabled_when(move || scene.selected.get().is_some() && !scene.sending.get())
+                .enabled(move || scene.selected.get().is_some() && !scene.sending.get())
                 .action(move || scene.send()),
         ]
     })
@@ -173,7 +180,7 @@ fn empty_state(scene: Scene) -> impl Piece {
     ))
     .align(HAlign::Center)
     .grow()
-    .padding(24.0)
+    .padding(Space::XL)
     .grow()
 }
 
@@ -182,65 +189,52 @@ fn editor(scene: Scene) -> impl Piece {
         url_bar(scene),
         // One pane at a time on a phone, both beside each other where there is room. The read
         // is tracked, so a window crossing a breakpoint re-arranges.
-        each(
-            items(
-                move || vec![day::size_class().is_some_and(|c| c.width >= WidthClass::Expanded)],
-                |wide: &bool| *wide,
-            ),
-            move |slot: ItemSlot<bool, bool>| {
-                if slot.key() {
-                    // The toolkit's own splitter where there is one: the request form and the
-                    // response, side by side or stacked (the toolbar's layout button), the
-                    // divider's position kept per window.
-                    Either::Left(
-                        split(request_pane(scene), response_pane(scene))
-                            .axis(move || {
-                                if scene.stacked.get() {
-                                    SplitAxis::Vertical
-                                } else {
-                                    SplitAxis::Horizontal
-                                }
-                            })
-                            .fraction(scene.split)
-                            .id("editor-split")
-                            .grow(),
-                    )
-                } else {
-                    Either::Right(
-                        column((
-                            picker(
-                                [
-                                    res::str::pane_request().format(),
-                                    res::str::pane_response().format(),
-                                ],
-                                scene.pane,
-                            )
-                            .segmented()
-                            // The id goes on the picker, not on the padding around it: a
-                            // scripted `select` is delivered to the node the id names.
-                            .id("pane-picker")
-                            .padding(Insets {
-                                top: 0.0,
-                                leading: 12.0,
-                                bottom: 4.0,
-                                trailing: 12.0,
-                            }),
-                            each(
-                                items(move || vec![scene.pane.get()], |p: &usize| *p),
-                                move |slot: ItemSlot<usize, usize>| {
-                                    if slot.key() == 0 {
-                                        Either::Left(request_pane(scene).grow())
-                                    } else {
-                                        Either::Right(response_pane(scene).grow())
-                                    }
-                                },
-                            ),
-                        ))
-                        .grow(),
-                    )
-                }
+        when(
+            || day::size_class().is_some_and(|c| c.width >= WidthClass::Expanded),
+            move || {
+                // The toolkit's own splitter where there is one: the request form and the
+                // response, side by side or stacked (the toolbar's layout button), the
+                // divider's position kept per window.
+                split(request_pane(scene), response_pane(scene))
+                    .axis(move || {
+                        if scene.stacked.get() {
+                            SplitAxis::Vertical
+                        } else {
+                            SplitAxis::Horizontal
+                        }
+                    })
+                    .fraction(scene.split)
+                    .id("editor-split")
+                    .grow()
             },
-        ),
+        )
+        .otherwise(move || {
+            column((
+                picker(
+                    scene.pane,
+                    [
+                        (0, res::str::pane_request()),
+                        (1, res::str::pane_response()),
+                    ],
+                )
+                .segmented()
+                .id("pane-picker")
+                .padding(Insets {
+                    top: 0.0,
+                    leading: 12.0,
+                    bottom: 4.0,
+                    trailing: 12.0,
+                }),
+                switch(
+                    move || scene.pane.get(),
+                    move |pane| match pane {
+                        0 => request_pane(scene).grow().any(),
+                        _ => response_pane(scene).grow().any(),
+                    },
+                ),
+            ))
+            .grow()
+        }),
     ))
     .grow()
 }
@@ -249,7 +243,7 @@ fn editor(scene: Scene) -> impl Piece {
 /// in flight the button cancels it.
 fn url_bar(scene: Scene) -> impl Piece {
     row((
-        picker(METHODS, scene.method).menu().id("method"),
+        picker(scene.method, indexed_titles(&METHODS)).menu().id("method"),
         // A single-line styled editor rather than a text field, so a template tag reads as one
         // in the URL; Return sends.
         text_editor_text(scene.url)
@@ -270,9 +264,9 @@ fn url_bar(scene: Scene) -> impl Piece {
         .action(move || if scene.sending.get_untracked() { scene.cancel() } else { scene.send() })
         .id("send"),
     ))
-    .spacing(8.0)
+    .spacing(Space::S)
     .align(VAlign::Center)
-    .padding(Insets { top: 8.0, leading: 12.0, bottom: 8.0, trailing: 12.0 })
+    .padding(Insets::symmetric(12.0, 8.0))
 }
 
 /// The request's own settings: its name and environment, then one tab at a time of its body,
@@ -289,37 +283,34 @@ fn request_pane(scene: Scene) -> impl Piece {
                 move || {
                     labeled(
                         res::str::field_environment(),
-                        picker([res::str::environment_base().format()], scene.environment)
-                            .options_reactive(move || {
-                                let mut names = vec![res::str::environment_base().format()];
-                                names.extend(
-                                    scene.environments.get().iter().map(|e| e.name.clone()),
-                                );
-                                names
-                            })
-                            .menu()
-                            .id("environment"),
+                        picker(scene.environment, move || {
+                            let mut names = vec![res::str::environment_base().format()];
+                            names.extend(scene.environments.get().iter().map(|e| e.name.clone()));
+                            names.into_iter().enumerate().collect::<Vec<_>>()
+                        })
+                        .menu()
+                        .id("environment"),
                     )
                 },
             ),
             // Five tabs are wider than a request pane dragged narrow, so the strip scrolls
             // sideways there instead of losing its last tab.
-            row((picker(TABS.iter().map(|k| tr(k).format()), scene.tab)
-                .segmented()
-                .id("request-tab"),))
-            .fit(RowFit::Scroll),
-            when(move || scene.tab.get() == 0, move || body_tab(scene)),
-            when(move || scene.tab.get() == 1, move || params_tab(scene)),
-            when(
-                move || scene.tab.get() == 2,
-                move || pairs_editor(scene, scene.headers, &HEADER_IDS),
+            row((picker(scene.tab, indexed(&TABS)).segmented().id("request-tab"),))
+                .fit(RowFit::Scroll),
+            switch(
+                move || scene.tab.get(),
+                move |tab| match tab {
+                    0 => body_tab(scene).any(),
+                    1 => params_tab(scene).any(),
+                    2 => pairs_editor(scene, scene.headers, &HEADER_IDS).any(),
+                    3 => auth_tab(scene).any(),
+                    _ => settings_tab(scene).any(),
+                },
             ),
-            when(move || scene.tab.get() == 3, move || auth_tab(scene)),
-            when(move || scene.tab.get() == 4, move || settings_tab(scene)),
         ))
         .spacing(10.0)
         .align(HAlign::Leading)
-        .padding(12.0),
+        .padding(Space::M),
     )
 }
 
@@ -430,14 +421,11 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
             ))
             .spacing(6.0)
             .align(VAlign::Center);
-            row((name.grow(), value.grow()))
-                .spacing(6.0)
-                .align(VAlign::Center)
-                .fit(RowFit::ColumnAt(WidthClass::Compact))
+            adaptive((name.grow(), value.grow())).spacing(6.0)
         }),
         button(res::str::cmd_add()).compact().action(move || scene.add_row(rows)).id(ids.add),
     ))
-    .spacing(8.0)
+    .spacing(Space::S)
     .align(HAlign::Leading)
 }
 
@@ -453,7 +441,7 @@ fn file_name(path: &str) -> String {
 fn body_tab(scene: Scene) -> impl Piece {
     let kind = move || scene.body_kind.get();
     column((
-        picker(BODY_KINDS.iter().map(|k| tr(k).format()), scene.body_kind).menu().id("body-kind"),
+        picker(scene.body_kind, indexed(&BODY_KINDS)).menu().id("body-kind"),
         when(
             move || matches!(kind(), body::JSON | body::TEXT | body::XML),
             move || {
@@ -520,7 +508,7 @@ fn body_tab(scene: Scene) -> impl Piece {
                         .action(move || scene.pick_binary())
                         .id("binary-choose"),
                 ))
-                .spacing(8.0)
+                .spacing(Space::S)
                 .align(VAlign::Center)
             },
         ),
@@ -539,14 +527,15 @@ fn params_tab(scene: Scene) -> impl Piece {
     .align(HAlign::Leading)
 }
 
-/// The picker's choices: the fixed ones, and a stored plugin type under its own name.
-fn auth_choices(scene: Scene) -> Vec<String> {
+/// The picker's choices, by position: the fixed ones, and a stored plugin type under its own
+/// name at [`auth::FOREIGN`].
+fn auth_choices(scene: Scene) -> Vec<(usize, String)> {
     let mut choices: Vec<String> = AUTH_KINDS.iter().map(|k| tr(k).format()).collect();
     let foreign = scene.auth_foreign.get();
     if !foreign.is_empty() {
         choices.push(foreign);
     }
-    choices
+    choices.into_iter().enumerate().collect()
 }
 
 /// Authentication: inherited, none, or one of the types this client applies itself.
@@ -558,12 +547,9 @@ fn auth_tab(scene: Scene) -> impl Piece {
         secure_field(text).secure(move || !shown.get()).id(id).grow()
     };
     column((
-        // Seeded with the stored plugin type when there is one, so the choice it names exists
-        // from the first frame.
-        picker(untrack(move || auth_choices(scene)), scene.auth_kind)
-            .options_reactive(move || auth_choices(scene))
-            .menu()
-            .id("auth-kind"),
+        // Derived, so the stored plugin type's choice exists from the first frame and follows
+        // the request.
+        picker(scene.auth_kind, move || auth_choices(scene)).menu().id("auth-kind"),
         when(
             move || kind() == auth::INHERIT,
             || label(res::str::auth_inherit_hint()).font(Font::Footnote).secondary(),
@@ -610,7 +596,7 @@ fn auth_tab(scene: Scene) -> impl Piece {
                 form((
                     labeled(
                         res::str::auth_location(),
-                        picker(AUTH_LOCATIONS.iter().map(|k| tr(k).format()), scene.auth_location)
+                        picker(scene.auth_location, indexed(&AUTH_LOCATIONS))
                             .menu()
                             .id("auth-location"),
                     ),
@@ -648,7 +634,7 @@ fn inherited_choice<M>(
     value: Signal<usize>,
     id: &'static str,
 ) -> impl Piece {
-    labeled(title, picker(TRI_STATE.iter().map(|k| tr(k).format()), value).menu().id(id))
+    labeled(title, picker(value, indexed(&TRI_STATE)).menu().id(id))
 }
 
 /// What this request overrides of its folder's and workspace's send settings.
@@ -677,9 +663,7 @@ fn settings_tab(scene: Scene) -> impl Piece {
             ),
             labeled(
                 res::str::setting_http_version(),
-                picker(HTTP_VERSIONS.iter().map(|k| tr(k).format()), scene.http_version)
-                    .menu()
-                    .id("set-http-version"),
+                picker(scene.http_version, indexed(&HTTP_VERSIONS)).menu().id("set-http-version"),
             ),
             labeled(
                 res::str::setting_timeout(),
@@ -711,30 +695,21 @@ fn response_pane(scene: Scene) -> impl Piece {
                 ))
                 .spacing(10.0)
                 .align(VAlign::Center)
-                .padding(12.0)
+                .padding(Space::M)
             },
         ),
         when(
             move || !scene.sending.get() && scene.response.get().is_none(),
-            || label(res::str::response_none()).secondary().padding(12.0).id("response-none"),
+            || label(res::str::response_none()).secondary().padding(Space::M).id("response-none"),
         ),
         when(
             move || !scene.sending.get() && !scene.history.get().is_empty(),
             move || history_row(scene),
         ),
-        each(
-            items(
-                move || {
-                    if scene.sending.get() {
-                        Vec::new()
-                    } else {
-                        scene.response.get().into_iter().collect::<Vec<Sent>>()
-                    }
-                },
-                // The key is the whole response: a new one rebuilds the pane.
-                |s: &Sent| format!("{}:{}:{}:{}", s.id, s.status, s.elapsed_ms, s.body_len),
-            ),
-            move |slot: ItemSlot<Sent, String>| response_view(scene, slot.get()),
+        // The key is the whole response: a new one rebuilds the pane.
+        keyed(
+            move || (!scene.sending.get()).then(|| scene.response.get()).flatten(),
+            move |sent: &Sent| response_view(scene, sent.clone()),
         ),
     ))
     .align(HAlign::Leading)
@@ -754,19 +729,16 @@ fn history_label(entry: &ResponseSummary) -> String {
 
 /// The request's stored responses, newest first, and the way to forget them.
 fn history_row(scene: Scene) -> impl Piece {
-    let labels = move || scene.history.get().iter().map(history_label).collect::<Vec<_>>();
+    let labels =
+        move || scene.history.get().iter().map(history_label).enumerate().collect::<Vec<_>>();
     row((
-        picker(untrack(labels), scene.history_index)
-            .options_reactive(labels)
-            .menu()
-            .id("history")
-            .grow(),
+        picker(scene.history_index, labels).menu().id("history").grow(),
         button(res::str::cmd_clear_history())
             .compact()
             .action(move || scene.clear_history())
             .id("clear-history"),
     ))
-    .spacing(8.0)
+    .spacing(Space::S)
     .align(VAlign::Center)
     .padding(Insets { top: 12.0, leading: 12.0, bottom: 0.0, trailing: 12.0 })
 }
@@ -802,28 +774,27 @@ fn response_view(scene: Scene, sent: Sent) -> impl Piece {
                 },
             ),
             picker(
-                [
-                    res::str::response_tab_body().format(),
-                    res::str::response_tab_headers().format(),
-                    res::str::response_tab_timeline().format(),
-                ],
                 scene.response_tab,
+                [
+                    (0, res::str::response_tab_body()),
+                    (1, res::str::response_tab_headers()),
+                    (2, res::str::response_tab_timeline()),
+                ],
             )
             .segmented()
             .id("response-tab"),
-            when(move || scene.response_tab.get() == 0, move || response_body(for_body.clone())),
-            when(
-                move || scene.response_tab.get() == 1,
-                move || response_headers(for_headers.clone()),
-            ),
-            when(
-                move || scene.response_tab.get() == 2,
-                move || response_timeline(for_timeline.clone()),
+            switch(
+                move || scene.response_tab.get(),
+                move |tab| match tab {
+                    0 => response_body(for_body.clone()).any(),
+                    1 => response_headers(for_headers.clone()).any(),
+                    _ => response_timeline(for_timeline.clone()).any(),
+                },
             ),
         ))
-        .spacing(8.0)
+        .spacing(Space::S)
         .align(HAlign::Leading)
-        .padding(12.0),
+        .padding(Space::M),
     )
 }
 
@@ -839,7 +810,7 @@ fn response_body(sent: Sent) -> impl Piece {
     };
     text_editor_text(Signal::new(text))
         .editable(false)
-        .spellcheck(false)
+        .no_spellcheck()
         .min_lines(3)
         .highlight(highlighter(
             sent.content_type.as_deref().map(Language::for_mime).unwrap_or(Language::Plain),
@@ -851,16 +822,14 @@ fn response_body(sent: Sent) -> impl Piece {
 
 /// One `name: value` line per pair, selectable.
 fn pair_lines(pairs: Vec<(String, String)>) -> impl Piece {
-    column((each(
-        items(
-            move || pairs.iter().cloned().enumerate().collect::<Vec<_>>(),
-            |row: &(usize, (String, String))| row.0,
-        ),
-        |slot: ItemSlot<(usize, (String, String)), usize>| {
-            let (_, (name, value)) = slot.get();
-            label(format!("{name}: {value}")).font(Font::Footnote).monospace().selectable()
-        },
-    ),))
+    column(
+        pairs
+            .into_iter()
+            .map(|(name, value)| {
+                label(format!("{name}: {value}")).font(Font::Footnote).monospace().selectable()
+            })
+            .collect::<Vec<_>>(),
+    )
     .spacing(2.0)
     .align(HAlign::Leading)
 }
@@ -896,22 +865,21 @@ fn response_timeline(rows: Vec<TimelineRow>) -> impl Piece {
     let empty = rows.is_empty();
     column((
         when(move || empty, || label(res::str::timeline_none()).font(Font::Footnote).secondary()),
-        each(
-            items(
-                move || rows.iter().cloned().enumerate().collect::<Vec<_>>(),
-                |row: &(usize, TimelineRow)| row.0,
-            ),
-            |slot: ItemSlot<(usize, TimelineRow), usize>| {
-                let (_, row) = slot.get();
-                let note = row.mark == '*';
-                let line =
-                    label(format!("{} {}", row.mark, row.text)).font(Font::Footnote).monospace();
-                // Notes recede; what crossed the wire reads at full strength.
-                if note { line.secondary().selectable() } else { line.selectable() }
-            },
-        ),
+        column(
+            rows.into_iter()
+                .map(|row| {
+                    // Notes recede; what crossed the wire reads at full strength.
+                    label(format!("{} {}", row.mark, row.text))
+                        .font(Font::Footnote)
+                        .monospace()
+                        .apply_if(row.mark == '*', |line| line.secondary())
+                        .selectable()
+                })
+                .collect::<Vec<_>>(),
+        )
+        .spacing(2.0)
+        .align(HAlign::Leading),
     ))
-    .spacing(2.0)
     .align(HAlign::Leading)
     .id("timeline")
 }

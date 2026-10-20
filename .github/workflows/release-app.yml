@@ -93,7 +93,7 @@ jobs:
 
       - name: Cache CEF (Linux only)
         if: matrix.os == 'ubuntu' && matrix.runtime == 'cef'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/tauri-cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}

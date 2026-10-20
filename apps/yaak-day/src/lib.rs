@@ -16,15 +16,9 @@ day::day_start!(options: window(), root);
 /// Options for every window. The catalog and title go to `launch`, which installs them
 /// (https://daybrite.dev/docs/localization).
 pub fn window() -> day::WindowOptions {
-    day::WindowOptions {
-        locales: Some((res::locales::DEFAULT, res::locales::CATALOG)),
-        title_fn: Some(|| res::str::app_title().format()),
-        // Desktop only; phones fill the screen.
-        size: day::prelude::Size::new(1100.0, 720.0),
-        // Named in Day's exit line (https://daybrite.dev/docs/lifecycle).
-        version: Some(env!("CARGO_PKG_VERSION").into()),
-        ..Default::default()
-    }
+    // The generated options carry the catalog, the title and the version (named in Day's exit
+    // line, https://daybrite.dev/docs/lifecycle); the size is desktop only, phones fill the screen.
+    res::window_options().size(1100.0, 720.0)
 }
 
 // Typed names for everything under `resource/` (https://daybrite.dev/docs/resources).
@@ -75,31 +69,23 @@ fn window_shell(prefs: Prefs) -> impl Piece {
         nav(scene.section)
             .style(NavStyle::Sidebar)
             .title(res::str::app_title())
-            .content_list(ui::request_list_pane)
-            .content_list_width(300.0)
-            .content_list_for(|k: &Option<String>| k.as_deref() != Some(SETTINGS))
-            .detail_visible(scene.detail_open)
-            .detail_title(move || ui::detail_title(scene))
-            .items(
-                move || scene.workspaces.get(),
-                |w: &yaak_models::models::Workspace| item(w.id.clone(), w.name.clone()),
+            .content_list(
+                ContentList::new(ui::request_list_pane)
+                    .width(300.0)
+                    .only_for(|k: &Option<String>| k.as_deref() != Some(SETTINGS))
+                    .detail_visible(scene.detail_open)
+                    .detail_title(move || ui::detail_title(scene)),
             )
-            // Use the desktop's App menu Settings… item; without a menu bar, keep Settings
-            // reachable as a navigation row (https://daybrite.dev/docs/settings).
-            .items(
-                {
-                    let prefs = prefs.clone();
-                    move || prefs.nav_keys(SETTINGS.to_string())
-                },
-                |k: &String| item(k.clone(), res::str::nav_settings()),
-            )
-            .destination(move |k: &Option<String>| {
-                if k.as_deref() == Some(SETTINGS) {
-                    Either::Left(prefs.page())
-                } else {
-                    Either::Right(ui::request_page())
-                }
-            })
+            .items((
+                nav_items(
+                    move || scene.workspaces.get(),
+                    |w: &yaak_models::models::Workspace| item(w.id.clone(), w.name.clone()),
+                ),
+                // Use the desktop's App menu Settings… item; without a menu bar, keep Settings
+                // reachable as a navigation row (https://daybrite.dev/docs/settings).
+                prefs.nav_item(Some(SETTINGS.to_string())),
+            ))
+            .destination(|_: &Option<String>| ui::request_page())
             .id("nav")
     })
 }
@@ -118,37 +104,37 @@ fn front(f: impl Fn(Scene) + 'static) -> impl Fn() + 'static {
 fn menus() -> Vec<MenuEntry> {
     vec![
         sub_menu(
-            res::str::menu_file().format(),
+            res::str::menu_file(),
             vec![
                 menu_role(MenuRole::NewWindow),
-                menu_item(res::str::cmd_new_request().format())
-                    .shortcut(Shortcut::new("n").shift())
+                menu_item(res::str::cmd_new_request())
+                    .shortcut(Shortcut::primary("n").shift())
                     .action(front(|scene| scene.new_request())),
                 menu_separator(),
                 menu_role(MenuRole::CloseWindow),
             ],
         ),
         sub_menu(
-            res::str::menu_edit().format(),
+            res::str::menu_edit(),
             vec![
                 menu_role(MenuRole::Cut),
                 menu_role(MenuRole::Copy),
                 menu_role(MenuRole::Paste),
                 menu_role(MenuRole::SelectAll),
                 menu_separator(),
-                menu_item(res::str::cmd_delete().format())
-                    .shortcut(Shortcut::new("Delete"))
+                menu_item(res::str::cmd_delete())
+                    .shortcut(Shortcut::primary("Delete"))
                     .action(front(|scene| scene.delete_selected())),
             ],
         ),
         sub_menu(
-            res::str::menu_request().format(),
+            res::str::menu_request(),
             vec![
-                menu_item(res::str::cmd_send().format())
-                    .shortcut(Shortcut::new("Enter"))
+                menu_item(res::str::cmd_send())
+                    .shortcut(Shortcut::primary("Enter"))
                     .action(front(|scene| scene.send())),
-                menu_item(res::str::cmd_cancel().format())
-                    .shortcut(Shortcut::new("."))
+                menu_item(res::str::cmd_cancel())
+                    .shortcut(Shortcut::primary("."))
                     .action(front(|scene| scene.cancel())),
             ],
         ),
