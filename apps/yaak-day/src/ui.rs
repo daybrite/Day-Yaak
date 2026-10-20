@@ -35,7 +35,7 @@ pub(crate) fn request_list_pane() -> impl Piece {
         },
     );
     request_list(scene).grow().toolbar(
-        toolbar_button("tb-new", res::str::cmd_new_request())
+        toolbar_button(day::id!(tb_new), res::str::cmd_new_request())
             .icon(Symbol::Add)
             .tooltip(res::str::cmd_new_request())
             .placement(ToolbarPlacement::Primary)
@@ -63,7 +63,7 @@ fn request_list(scene: Scene) -> impl Piece {
         })
         .label(res::str::cmd_delete()),
     )
-    .id("request-list")
+    .id(day::id!(request_list))
 }
 
 /// One row: the method in its color, the name, and the folder as a caption.
@@ -139,7 +139,7 @@ pub(crate) fn request_page() -> impl Piece {
         vec![
             // Stack the response under the request, or put it back beside it. Only the wide
             // editor has the split; a phone shows one pane at a time behind its picker.
-            toolbar_button("tb-layout", res::str::cmd_layout())
+            toolbar_button(day::id!(tb_layout), res::str::cmd_layout())
                 .image(if stacked {
                     res::vectors::layout_beside
                 } else {
@@ -152,7 +152,7 @@ pub(crate) fn request_page() -> impl Piece {
                 })
                 .enabled(move || scene.selected.get().is_some())
                 .action(move || scene.stacked.update(|s| *s = !*s)),
-            toolbar_button("tb-send", res::str::cmd_send())
+            toolbar_button(day::id!(tb_send), res::str::cmd_send())
                 .image(res::vectors::send)
                 .tooltip(res::str::cmd_send())
                 .placement(ToolbarPlacement::Primary)
@@ -175,7 +175,7 @@ fn empty_state(scene: Scene) -> impl Piece {
         .font(Font::Title3)
         .secondary()
         .align(TextAlign::Center)
-        .id("empty-state"),
+        .id(day::id!(empty_state)),
         spacer(),
     ))
     .align(HAlign::Center)
@@ -204,7 +204,7 @@ fn editor(scene: Scene) -> impl Piece {
                         }
                     })
                     .fraction(scene.split)
-                    .id("editor-split")
+                    .id(day::id!(editor_split))
                     .grow()
             },
         )
@@ -218,7 +218,7 @@ fn editor(scene: Scene) -> impl Piece {
                     ],
                 )
                 .segmented()
-                .id("pane-picker")
+                .id(day::id!(pane_picker))
                 .padding(Insets {
                     top: 0.0,
                     leading: 12.0,
@@ -243,7 +243,7 @@ fn editor(scene: Scene) -> impl Piece {
 /// in flight the button cancels it.
 fn url_bar(scene: Scene) -> impl Piece {
     row((
-        picker(scene.method, indexed_titles(&METHODS)).menu().id("method"),
+        picker(scene.method, indexed_titles(&METHODS)).menu().id(day::id!(method)),
         // A single-line styled editor rather than a text field, so a template tag reads as one
         // in the URL; Return sends.
         text_editor_text(scene.url)
@@ -251,7 +251,7 @@ fn url_bar(scene: Scene) -> impl Piece {
             .placeholder(res::str::url_hint())
             .on_submit(move || scene.send())
             .highlight(highlighter(Language::Plain, Palette::default(), true))
-            .id("url")
+            .id(day::id!(url))
             .grow(),
         button(move || {
             if scene.sending.get() {
@@ -262,7 +262,7 @@ fn url_bar(scene: Scene) -> impl Piece {
         })
         .prominent()
         .action(move || if scene.sending.get_untracked() { scene.cancel() } else { scene.send() })
-        .id("send"),
+        .id(day::id!(send)),
     ))
     .spacing(Space::S)
     .align(VAlign::Center)
@@ -276,7 +276,7 @@ fn request_pane(scene: Scene) -> impl Piece {
         column((
             labeled(
                 res::str::field_name(),
-                text_field(scene.name).placeholder(res::str::field_name_hint()).id("name"),
+                text_field(scene.name).placeholder(res::str::field_name_hint()).id(day::id!(name)),
             ),
             when(
                 move || !scene.environments.get().is_empty(),
@@ -289,13 +289,13 @@ fn request_pane(scene: Scene) -> impl Piece {
                             names.into_iter().enumerate().collect::<Vec<_>>()
                         })
                         .menu()
-                        .id("environment"),
+                        .id(day::id!(environment)),
                     )
                 },
             ),
             // Five tabs are wider than a request pane dragged narrow, so the strip scrolls
             // sideways there instead of losing its last tab.
-            row((picker(scene.tab, indexed(&TABS)).segmented().id("request-tab"),))
+            row((picker(scene.tab, indexed(&TABS)).segmented().id(day::id!(request_tab)),))
                 .fit(RowFit::Scroll),
             switch(
                 move || scene.tab.get(),
@@ -317,37 +317,42 @@ fn request_pane(scene: Scene) -> impl Piece {
 /// The element ids of one name-and-value editor, so a walkthrough can tell the headers' rows
 /// from the parameters' and the form's.
 struct PairIds {
-    on: &'static str,
-    name: &'static str,
-    value: &'static str,
-    file: &'static str,
-    remove: &'static str,
-    add: &'static str,
+    on: fn(String) -> day::ElementId,
+    name: fn(String) -> day::ElementId,
+    value: fn(String) -> day::ElementId,
+    file: fn(String) -> day::ElementId,
+    remove: fn(String) -> day::ElementId,
+    add: fn() -> day::ElementId,
+    /// Which editor this is, so the multipart form's rows can be told from the others.
+    multipart: bool,
 }
 
 const HEADER_IDS: PairIds = PairIds {
-    on: "header-on",
-    name: "header-name",
-    value: "header-value",
-    file: "header-file",
-    remove: "header-remove",
-    add: "add-header",
+    on: |k| day::id!(header_on, k),
+    name: |k| day::id!(header_name, k),
+    value: |k| day::id!(header_value, k),
+    file: |k| day::id!(header_file, k),
+    remove: |k| day::id!(header_remove, k),
+    add: || day::id!(add_header),
+    multipart: false,
 };
 const PARAM_IDS: PairIds = PairIds {
-    on: "param-on",
-    name: "param-name",
-    value: "param-value",
-    file: "param-file",
-    remove: "param-remove",
-    add: "add-param",
+    on: |k| day::id!(param_on, k),
+    name: |k| day::id!(param_name, k),
+    value: |k| day::id!(param_value, k),
+    file: |k| day::id!(param_file, k),
+    remove: |k| day::id!(param_remove, k),
+    add: || day::id!(add_param),
+    multipart: false,
 };
 const FORM_IDS: PairIds = PairIds {
-    on: "form-on",
-    name: "form-name",
-    value: "form-value",
-    file: "form-file",
-    remove: "form-remove",
-    add: "add-field",
+    on: |k| day::id!(form_on, k),
+    name: |k| day::id!(form_name, k),
+    value: |k| day::id!(form_value, k),
+    file: |k| day::id!(form_file, k),
+    remove: |k| day::id!(form_remove, k),
+    add: || day::id!(add_field),
+    multipart: true,
 };
 
 /// One row per pair: enabled, name, value, remove, and Add under the last. Each field binds
@@ -358,15 +363,14 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
         each(rows.rows(move || rows.keys()), move |slot: ModelSlot<PairRow>| {
             let key = slot.key();
             let has_file = move || slot.file().with(|f| f.is_some_and(|f| !f.is_empty()));
-            let takes_file =
-                move || ids.file == FORM_IDS.file && scene.body_kind.get() == body::MULTIPART;
+            let takes_file = move || ids.multipart && scene.body_kind.get() == body::MULTIPART;
             // Two halves, side by side where there is room and one over the other on a
             // phone: the switch with the name, then the value with the row's buttons.
             let name = row((
-                toggle(slot.enabled()).id_keyed(ids.on, key),
+                toggle(slot.enabled()).id((ids.on)(key.to_string())),
                 text_field(slot.name())
                     .placeholder(res::str::pair_name_hint())
-                    .id_keyed(ids.name, key)
+                    .id((ids.name)(key.to_string()))
                     .grow(),
             ))
             .spacing(6.0)
@@ -381,13 +385,13 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
                             .single_line()
                             .placeholder(res::str::pair_value_hint())
                             .highlight(highlighter(Language::Plain, Palette::default(), true))
-                            .id_keyed(ids.value, key)
+                            .id((ids.value)(key.to_string()))
                     },
                 )
                 .otherwise(move || {
                     label(move || slot.file().with(|f| file_name(f.map_or("", |f| f.as_str()))))
                         .secondary()
-                        .id_keyed(ids.value, key)
+                        .id((ids.value)(key.to_string()))
                 })
                 .grow(),
                 when(takes_file, move || {
@@ -410,20 +414,20 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
                             scene.pick_form_file(key);
                         }
                     })
-                    .id_keyed(ids.file, key)
+                    .id((ids.file)(key.to_string()))
                 }),
                 button(res::str::cmd_remove_row())
                     .icon(Symbol::Delete)
                     .icon_only()
                     .compact()
                     .action(move || scene.remove_row(rows, key))
-                    .id_keyed(ids.remove, key),
+                    .id((ids.remove)(key.to_string())),
             ))
             .spacing(6.0)
             .align(VAlign::Center);
             adaptive((name.grow(), value.grow())).spacing(6.0)
         }),
-        button(res::str::cmd_add()).compact().action(move || scene.add_row(rows)).id(ids.add),
+        button(res::str::cmd_add()).compact().action(move || scene.add_row(rows)).id((ids.add)()),
     ))
     .spacing(Space::S)
     .align(HAlign::Leading)
@@ -441,7 +445,7 @@ fn file_name(path: &str) -> String {
 fn body_tab(scene: Scene) -> impl Piece {
     let kind = move || scene.body_kind.get();
     column((
-        picker(scene.body_kind, indexed(&BODY_KINDS)).menu().id("body-kind"),
+        picker(scene.body_kind, indexed(&BODY_KINDS)).menu().id(day::id!(body_kind)),
         when(
             move || matches!(kind(), body::JSON | body::TEXT | body::XML),
             move || {
@@ -461,7 +465,7 @@ fn body_tab(scene: Scene) -> impl Piece {
                         };
                         highlight_with_templates(language, text, &palette)
                     })
-                    .id("body")
+                    .id(day::id!(body))
             },
         ),
         when(
@@ -481,7 +485,7 @@ fn body_tab(scene: Scene) -> impl Piece {
                         .highlight(move |text| {
                             highlight_with_templates(Language::GraphQl, text, &palette)
                         })
-                        .id("graphql-query"),
+                        .id(day::id!(graphql_query)),
                     label(res::str::graphql_variables()).font(Font::Subheadline).secondary(),
                     text_editor_text(scene.graphql_variables)
                         .code()
@@ -490,7 +494,7 @@ fn body_tab(scene: Scene) -> impl Piece {
                         .highlight(move |text| {
                             highlight_with_templates(Language::Json, text, &variables_palette)
                         })
-                        .id("graphql-variables"),
+                        .id(day::id!(graphql_variables)),
                 ))
                 .spacing(6.0)
                 .align(HAlign::Leading)
@@ -502,11 +506,11 @@ fn body_tab(scene: Scene) -> impl Piece {
                 row((
                     text_field(scene.binary_path)
                         .placeholder(res::str::binary_hint())
-                        .id("binary-path")
+                        .id(day::id!(binary_path))
                         .grow(),
                     button(res::str::cmd_choose_file())
                         .action(move || scene.pick_binary())
-                        .id("binary-choose"),
+                        .id(day::id!(binary_choose)),
                 ))
                 .spacing(Space::S)
                 .align(VAlign::Center)
@@ -543,13 +547,13 @@ fn auth_tab(scene: Scene) -> impl Piece {
     let kind = move || scene.auth_kind.get();
     // Secrets stay hidden until asked for; a template tag in one is worth reading.
     let shown = Signal::new(false);
-    let secret = move |text: Signal<String>, id: &'static str| {
+    let secret = move |text: Signal<String>, id: day::ElementId| {
         secure_field(text).secure(move || !shown.get()).id(id).grow()
     };
     column((
         // Derived, so the stored plugin type's choice exists from the first frame and follows
         // the request.
-        picker(scene.auth_kind, move || auth_choices(scene)).menu().id("auth-kind"),
+        picker(scene.auth_kind, move || auth_choices(scene)).menu().id(day::id!(auth_kind)),
         when(
             move || kind() == auth::INHERIT,
             || label(res::str::auth_inherit_hint()).font(Font::Footnote).secondary(),
@@ -560,7 +564,7 @@ fn auth_tab(scene: Scene) -> impl Piece {
                 label(move || res::str::auth_foreign_hint(scene.auth_foreign.get()).format())
                     .font(Font::Footnote)
                     .secondary()
-                    .id("auth-foreign")
+                    .id(day::id!(auth_foreign))
             },
         ),
         when(
@@ -569,11 +573,11 @@ fn auth_tab(scene: Scene) -> impl Piece {
                 form((
                     labeled(
                         res::str::auth_username(),
-                        text_field(scene.auth_username).id("auth-username").grow(),
+                        text_field(scene.auth_username).id(day::id!(auth_username)).grow(),
                     ),
                     labeled(
                         res::str::auth_password(),
-                        secret(scene.auth_password, "auth-password"),
+                        secret(scene.auth_password, day::id!(auth_password)),
                     ),
                 ))
             },
@@ -582,10 +586,10 @@ fn auth_tab(scene: Scene) -> impl Piece {
             move || kind() == auth::BEARER,
             move || {
                 form((
-                    labeled(res::str::auth_token(), secret(scene.auth_token, "auth-token")),
+                    labeled(res::str::auth_token(), secret(scene.auth_token, day::id!(auth_token))),
                     labeled(
                         res::str::auth_prefix(),
-                        text_field(scene.auth_prefix).id("auth-prefix").grow(),
+                        text_field(scene.auth_prefix).id(day::id!(auth_prefix)).grow(),
                     ),
                 ))
             },
@@ -598,7 +602,7 @@ fn auth_tab(scene: Scene) -> impl Piece {
                         res::str::auth_location(),
                         picker(scene.auth_location, indexed(&AUTH_LOCATIONS))
                             .menu()
-                            .id("auth-location"),
+                            .id(day::id!(auth_location)),
                     ),
                     labeled(
                         move || {
@@ -608,9 +612,9 @@ fn auth_tab(scene: Scene) -> impl Piece {
                                 res::str::auth_key_header().format()
                             }
                         },
-                        text_field(scene.auth_key).id("auth-key").grow(),
+                        text_field(scene.auth_key).id(day::id!(auth_key)).grow(),
                     ),
-                    labeled(res::str::auth_value(), secret(scene.auth_value, "auth-value")),
+                    labeled(res::str::auth_value(), secret(scene.auth_value, day::id!(auth_value))),
                 ))
             },
         ),
@@ -618,8 +622,11 @@ fn auth_tab(scene: Scene) -> impl Piece {
             move || matches!(kind(), auth::BASIC | auth::BEARER | auth::API_KEY),
             move || {
                 form((
-                    labeled(res::str::auth_show(), toggle(shown).id("auth-show")),
-                    labeled(res::str::auth_enabled(), toggle(scene.auth_enabled).id("auth-on")),
+                    labeled(res::str::auth_show(), toggle(shown).id(day::id!(auth_show))),
+                    labeled(
+                        res::str::auth_enabled(),
+                        toggle(scene.auth_enabled).id(day::id!(auth_on)),
+                    ),
                 ))
             },
         ),
@@ -632,7 +639,7 @@ fn auth_tab(scene: Scene) -> impl Piece {
 fn inherited_choice<M>(
     title: impl IntoText<M>,
     value: Signal<usize>,
-    id: &'static str,
+    id: day::ElementId,
 ) -> impl Piece {
     labeled(title, picker(value, indexed(&TRI_STATE)).menu().id(id))
 }
@@ -644,33 +651,35 @@ fn settings_tab(scene: Scene) -> impl Piece {
             inherited_choice(
                 res::str::setting_follow_redirects(),
                 scene.follow_redirects,
-                "set-redirects",
+                day::id!(set_redirects),
             ),
             inherited_choice(
                 res::str::setting_validate_certificates(),
                 scene.validate_certificates,
-                "set-certificates",
+                day::id!(set_certificates),
             ),
             inherited_choice(
                 res::str::setting_send_cookies(),
                 scene.send_cookies,
-                "set-send-cookies",
+                day::id!(set_send_cookies),
             ),
             inherited_choice(
                 res::str::setting_store_cookies(),
                 scene.store_cookies,
-                "set-store-cookies",
+                day::id!(set_store_cookies),
             ),
             labeled(
                 res::str::setting_http_version(),
-                picker(scene.http_version, indexed(&HTTP_VERSIONS)).menu().id("set-http-version"),
+                picker(scene.http_version, indexed(&HTTP_VERSIONS))
+                    .menu()
+                    .id(day::id!(set_http_version)),
             ),
             labeled(
                 res::str::setting_timeout(),
                 text_field(scene.timeout)
                     .placeholder(res::str::setting_timeout_hint())
                     .input_purpose(InputPurpose::Number)
-                    .id("set-timeout")
+                    .id(day::id!(set_timeout))
                     .grow(),
             ),
         )),
@@ -691,7 +700,7 @@ fn response_pane(scene: Scene) -> impl Piece {
                     button(res::str::cmd_cancel())
                         .compact()
                         .action(move || scene.cancel())
-                        .id("cancel"),
+                        .id(day::id!(cancel)),
                 ))
                 .spacing(10.0)
                 .align(VAlign::Center)
@@ -700,7 +709,12 @@ fn response_pane(scene: Scene) -> impl Piece {
         ),
         when(
             move || !scene.sending.get() && scene.response.get().is_none(),
-            || label(res::str::response_none()).secondary().padding(Space::M).id("response-none"),
+            || {
+                label(res::str::response_none())
+                    .secondary()
+                    .padding(Space::M)
+                    .id(day::id!(response_none))
+            },
         ),
         when(
             move || !scene.sending.get() && !scene.history.get().is_empty(),
@@ -732,11 +746,11 @@ fn history_row(scene: Scene) -> impl Piece {
     let labels =
         move || scene.history.get().iter().map(history_label).enumerate().collect::<Vec<_>>();
     row((
-        picker(scene.history_index, labels).menu().id("history").grow(),
+        picker(scene.history_index, labels).menu().id(day::id!(history)).grow(),
         button(res::str::cmd_clear_history())
             .compact()
             .action(move || scene.clear_history())
-            .id("clear-history"),
+            .id(day::id!(clear_history)),
     ))
     .spacing(Space::S)
     .align(VAlign::Center)
@@ -762,15 +776,18 @@ fn response_view(scene: Scene, sent: Sent) -> impl Piece {
     scroll(
         column((
             row((
-                label(status_line).font(Font::Headline).color(status_color).id("status"),
-                label(meta).font(Font::Caption).secondary().id("response-meta"),
+                label(status_line).font(Font::Headline).color(status_color).id(day::id!(status)),
+                label(meta).font(Font::Caption).secondary().id(day::id!(response_meta)),
             ))
             .spacing(10.0)
             .align(VAlign::Center),
             when(
                 move || !error.is_empty(),
                 move || {
-                    label(error_shown.clone()).color(Color::hex(0xEF4444)).selectable().id("error")
+                    label(error_shown.clone())
+                        .color(Color::hex(0xEF4444))
+                        .selectable()
+                        .id(day::id!(error))
                 },
             ),
             picker(
@@ -782,7 +799,7 @@ fn response_view(scene: Scene, sent: Sent) -> impl Piece {
                 ],
             )
             .segmented()
-            .id("response-tab"),
+            .id(day::id!(response_tab)),
             switch(
                 move || scene.response_tab.get(),
                 move |tab| match tab {
@@ -817,7 +834,7 @@ fn response_body(sent: Sent) -> impl Piece {
             Palette::default(),
             false,
         ))
-        .id("response-body")
+        .id(day::id!(response_body))
 }
 
 /// One `name: value` line per pair, selectable.
@@ -850,9 +867,9 @@ fn response_headers(sent: Sent) -> impl Piece {
     details.push((res::str::detail_dns().format(), format!("{} ms", sent.elapsed_dns_ms)));
     column((
         label(res::str::section_response_headers()).font(Font::Headline),
-        pair_lines(sent.headers).id("response-headers"),
+        pair_lines(sent.headers).id(day::id!(response_headers)),
         label(res::str::section_request_headers()).font(Font::Headline),
-        pair_lines(sent.request_headers).id("request-headers"),
+        pair_lines(sent.request_headers).id(day::id!(request_headers)),
         label(res::str::section_details()).font(Font::Headline),
         pair_lines(details),
     ))
@@ -881,7 +898,7 @@ fn response_timeline(rows: Vec<TimelineRow>) -> impl Piece {
         .align(HAlign::Leading),
     ))
     .align(HAlign::Leading)
-    .id("timeline")
+    .id(day::id!(timeline))
 }
 
 // ---- settings ---------------------------------------------------------------------------------
@@ -895,10 +912,10 @@ pub(crate) fn data_group() -> Group {
         if engine.shared_with_desktop { res::str::store_shared() } else { res::str::store_own() };
     Group::new("data", res::str::settings_data())
         .icon(Symbol::Folder)
-        .row(rows::info(res::str::store(), store).id("store"))
+        .row(rows::info(res::str::store(), store).id(day::id!(store)))
         .row(
             rows::info(res::str::data_dir(), engine.data_dir.display().to_string())
                 .copyable()
-                .id("data-dir"),
+                .id(day::id!(data_dir)),
         )
 }

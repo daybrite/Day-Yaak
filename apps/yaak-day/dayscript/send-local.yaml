@@ -8,187 +8,187 @@
 # Not part of the CI run, which starts no server.
 flow:
   - wait_for: { id: nav }
-  - wait_for: { id: request-list }
-  - toolbar: { item: tb-new }
+  - wait_for: { id: request_list }
+  - toolbar: { item: tb_new }
   - wait_idle: {}
   - input: { id: url, text: "http://127.0.0.1:8765/hello.json" }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
   - assert_text: { id: status, text: "200 OK" }
-  - assert_visible: { id: response-body }
+  - assert_visible: { id: response_body }
   - screenshot: sent
   # A phone shows one pane at a time and a send brings up the response, so each edit below
   # first goes back to the request where there is a pane switcher to do it.
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - select: { id: pane_picker, index: 0, if_present: true }
 
   # Authentication. Basic: the pair, encoded, in the Authorization header.
-  - select: { id: request-tab, index: 3 }
-  - wait_for: { id: auth-kind }
-  - select: { id: auth-kind, index: 2 }
-  - wait_for: { id: auth-username }
-  - input: { id: auth-username, text: "aladdin" }
-  - input: { id: auth-password, text: "open sesame" }
+  - select: { id: request_tab, index: 3 }
+  - wait_for: { id: auth_kind }
+  - select: { id: auth_kind, index: 2 }
+  - wait_for: { id: auth_username }
+  - input: { id: auth_username, text: "aladdin" }
+  - input: { id: auth_password, text: "open sesame" }
   - input: { id: url, text: "http://127.0.0.1:8765/header/authorization" }
   - wait_idle: {}
   - screenshot: auth-basic
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "Basic YWxhZGRpbjpvcGVuIHNlc2FtZQ==" }
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - assert_text: { id: response_body, text: "Basic YWxhZGRpbjpvcGVuIHNlc2FtZQ==" }
+  - select: { id: pane_picker, index: 0, if_present: true }
   # Switched off, the same request goes out without it.
-  - toggle: { id: auth-on, value: false }
+  - toggle: { id: auth_on, value: false }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "(none)" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - toggle: { id: auth-on, value: true }
+  - assert_text: { id: response_body, text: "(none)" }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - toggle: { id: auth_on, value: true }
   # Bearer: the prefix and the token.
-  - select: { id: auth-kind, index: 3 }
-  - wait_for: { id: auth-token }
-  - input: { id: auth-token, text: "abc123" }
+  - select: { id: auth_kind, index: 3 }
+  - wait_for: { id: auth_token }
+  - input: { id: auth_token, text: "abc123" }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "Bearer abc123" }
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - assert_text: { id: response_body, text: "Bearer abc123" }
+  - select: { id: pane_picker, index: 0, if_present: true }
   # An API key in a header of its own, then as a query parameter.
-  - select: { id: auth-kind, index: 4 }
-  - wait_for: { id: auth-key }
-  - input: { id: auth-key, text: "X-Api-Key" }
-  - input: { id: auth-value, text: "s3cret" }
+  - select: { id: auth_kind, index: 4 }
+  - wait_for: { id: auth_key }
+  - input: { id: auth_key, text: "X-Api-Key" }
+  - input: { id: auth_value, text: "s3cret" }
   - input: { id: url, text: "http://127.0.0.1:8765/header/x-api-key" }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "s3cret" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - select: { id: auth-location, index: 1 }
-  - input: { id: auth-key, text: "api_key" }
+  - assert_text: { id: response_body, text: "s3cret" }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - select: { id: auth_location, index: 1 }
+  - input: { id: auth_key, text: "api_key" }
   - input: { id: url, text: "http://127.0.0.1:8765/query" }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "api_key=s3cret" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - select: { id: auth-kind, index: 1 }
+  - assert_text: { id: response_body, text: "api_key=s3cret" }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - select: { id: auth_kind, index: 1 }
   - wait_idle: {}
 
   # URL parameters: a query pair, and a value for the path's `:id` placeholder.
-  - select: { id: request-tab, index: 1 }
-  - wait_for: { id: add-param }
-  - tap: { id: add-param }
-  - wait_for: { id: "param-name:1" }
-  - input: { id: "param-name:1", text: "q" }
-  - input: { id: "param-value:1", text: "day yaak" }
-  - tap: { id: add-param }
-  - wait_for: { id: "param-name:2" }
-  - input: { id: "param-name:2", text: ":id" }
-  - input: { id: "param-value:2", text: "42" }
+  - select: { id: request_tab, index: 1 }
+  - wait_for: { id: add_param }
+  - tap: { id: add_param }
+  - wait_for: { id: "param_name:1" }
+  - input: { id: "param_name:1", text: "q" }
+  - input: { id: "param_value:1", text: "day yaak" }
+  - tap: { id: add_param }
+  - wait_for: { id: "param_name:2" }
+  - input: { id: "param_name:2", text: ":id" }
+  - input: { id: "param_value:2", text: "42" }
   - input: { id: url, text: "http://127.0.0.1:8765/users/:id" }
   - wait_idle: {}
   - screenshot: params
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "user 42 q=day%20yaak" }
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - assert_text: { id: response_body, text: "user 42 q=day%20yaak" }
+  - select: { id: pane_picker, index: 0, if_present: true }
   # A row switched off is left out.
-  - toggle: { id: "param-on:1", value: false }
+  - toggle: { id: "param_on:1", value: false }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "user 42" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - tap: { id: "param-remove:1" }
-  - tap: { id: "param-remove:2" }
+  - assert_text: { id: response_body, text: "user 42" }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - tap: { id: "param_remove:1" }
+  - tap: { id: "param_remove:2" }
   - wait_idle: {}
 
   # Bodies. A URL-encoded form; choosing the kind sets the method and the Content-Type header.
   - input: { id: url, text: "http://127.0.0.1:8765/body" }
-  - select: { id: request-tab, index: 0 }
-  - wait_for: { id: body-kind }
-  - select: { id: body-kind, index: 4 }
-  - wait_for: { id: add-field }
-  - tap: { id: add-field }
-  - wait_for: { id: "form-name:1" }
-  - input: { id: "form-name:1", text: "title" }
-  - input: { id: "form-value:1", text: "a b&c" }
+  - select: { id: request_tab, index: 0 }
+  - wait_for: { id: body_kind }
+  - select: { id: body_kind, index: 4 }
+  - wait_for: { id: add_field }
+  - tap: { id: add_field }
+  - wait_for: { id: "form_name:1" }
+  - input: { id: "form_name:1", text: "title" }
+  - input: { id: "form_value:1", text: "a b&c" }
   - wait_idle: {}
   - assert_text: { id: method, text: "POST" }
   - screenshot: body-form
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "POST application/x-www-form-urlencoded\ntitle=a%20b%26c" }
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - assert_text: { id: response_body, text: "POST application/x-www-form-urlencoded\ntitle=a%20b%26c" }
+  - select: { id: pane_picker, index: 0, if_present: true }
   # The same fields as multipart, then with a file beside them.
-  - select: { id: body-kind, index: 5 }
-  - wait_for: { id: "form-file:1" }
+  - select: { id: body_kind, index: 5 }
+  - wait_for: { id: "form_file:1" }
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "POST multipart/form-data\ntitle=a b&c" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - tap: { id: add-field }
-  - wait_for: { id: "form-name:2" }
-  - input: { id: "form-name:2", text: "upload" }
-  - tap: { id: "form-file:2" }
+  - assert_text: { id: response_body, text: "POST multipart/form-data\ntitle=a b&c" }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - tap: { id: add_field }
+  - wait_for: { id: "form_name:2" }
+  - input: { id: "form_name:2", text: "upload" }
+  - tap: { id: "form_file:2" }
   - assert_presented: {}
   - respond: { path: "${project}/dayscript/data/upload.txt" }
   - wait_idle: {}
-  - assert_text: { id: "form-value:2", text: "upload.txt" }
+  - assert_text: { id: "form_value:2", text: "upload.txt" }
   - screenshot: body-multipart
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "POST multipart/form-data\ntitle=a b&c\nupload=@upload.txt (13 bytes)" }
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - assert_text: { id: response_body, text: "POST multipart/form-data\ntitle=a b&c\nupload=@upload.txt (13 bytes)" }
+  - select: { id: pane_picker, index: 0, if_present: true }
   # GraphQL: the query, wrapped in the JSON a GraphQL server reads.
-  - select: { id: body-kind, index: 6 }
-  - wait_for: { id: graphql-query }
-  - input: { id: graphql-query, text: "{ me { id } }" }
+  - select: { id: body_kind, index: 6 }
+  - wait_for: { id: graphql_query }
+  - input: { id: graphql_query, text: "{ me { id } }" }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "POST application/json\n{\"query\":\"{ me { id } }\"}" }
-  - select: { id: pane-picker, index: 0, if_present: true }
+  - assert_text: { id: response_body, text: "POST application/json\n{\"query\":\"{ me { id } }\"}" }
+  - select: { id: pane_picker, index: 0, if_present: true }
   # A file as the whole body.
-  - select: { id: body-kind, index: 7 }
-  - wait_for: { id: binary-choose }
-  - tap: { id: binary-choose }
+  - select: { id: body_kind, index: 7 }
+  - wait_for: { id: binary_choose }
+  - tap: { id: binary_choose }
   - assert_presented: {}
   - respond: { path: "${project}/dayscript/data/upload.txt" }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
-  - assert_text: { id: response-body, text: "POST application/json\nhello upload\n" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - select: { id: body-kind, index: 0 }
+  - assert_text: { id: response_body, text: "POST application/json\nhello upload\n" }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - select: { id: body_kind, index: 0 }
   - wait_idle: {}
 
   # A per-request setting: with redirects off the 302 itself is the response.
   - input: { id: url, text: "http://127.0.0.1:8765/redirect" }
-  - select: { id: request-tab, index: 4 }
-  - wait_for: { id: set-redirects }
-  - select: { id: set-redirects, index: 2 }
+  - select: { id: request_tab, index: 4 }
+  - wait_for: { id: set_redirects }
+  - select: { id: set_redirects, index: 2 }
   - wait_idle: {}
   - screenshot: settings
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
   - assert_text: { id: status, text: "302 Found" }
-  - select: { id: pane-picker, index: 0, if_present: true }
-  - select: { id: set-redirects, index: 0 }
+  - select: { id: pane_picker, index: 0, if_present: true }
+  - select: { id: set_redirects, index: 0 }
   - wait_idle: {}
   - tap: { id: send }
   - wait_for: { id: status, timeout_secs: 30 }
   - assert_text: { id: status, text: "200 OK" }
 
   # The response's other views: what was sent and received, and the send as it happened.
-  - select: { id: response-tab, index: 1 }
-  - wait_for: { id: request-headers }
+  - select: { id: response_tab, index: 1 }
+  - wait_for: { id: request_headers }
   - screenshot: response-headers
-  - select: { id: response-tab, index: 2 }
+  - select: { id: response_tab, index: 2 }
   - wait_for: { id: timeline }
   - screenshot: response-timeline
-  - select: { id: response-tab, index: 0 }
+  - select: { id: response_tab, index: 0 }
   - wait_idle: {}
 
   # History: the send before this one is still there to read.
@@ -208,7 +208,7 @@ flow:
   - screenshot: cancelled
 
   # Clearing the history asks first, then leaves the pane empty.
-  - tap: { id: clear-history }
+  - tap: { id: clear_history }
   - assert_presented: {}
   - respond: { button: 1 }
-  - wait_for: { id: response-none }
+  - wait_for: { id: response_none }

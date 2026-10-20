@@ -6,11 +6,11 @@
 flow:
   # The nav host mounts on every platform; which chrome it wears depends on the window width.
   - wait_for: { id: nav }
-  - wait_for: { id: request-list }
+  - wait_for: { id: request_list }
   - screenshot: workspace
 
   # Open the first request of the example workspace and read its editor back.
-  - select: { id: request-list, index: 0 }
+  - select: { id: request_list, index: 0 }
   - wait_idle: {}
   - wait_for: { id: url }
   - assert_visible: { id: method }
@@ -27,7 +27,7 @@ flow:
   # chrome, so a phone goes back to the list first; a wide window has nothing to pop.
   - nav_back: {}
   - wait_idle: {}
-  - toolbar: { item: tb-new }
+  - toolbar: { item: tb_new }
   - wait_idle: {}
   - assert_text: { id: url, text: "" }
   - input: { id: url, text: "https://example.com/new" }
@@ -36,7 +36,7 @@ flow:
 
   # A JSON body in the styled editor: typed text reaches the store, and the highlighter restyles
   # it in place (the caret stays where the typing left it).
-  - select: { id: body-kind, index: 1 }
+  - select: { id: body_kind, index: 1 }
   - wait_idle: {}
   - wait_for: { id: body }
   # Code mode: Tab indents instead of leaving the editor. On the empty body the caret can only
@@ -52,80 +52,80 @@ flow:
   # Choosing a body kind is the user saying what the request carries, so the editor gives it
   # a method with a body and the matching Content-Type header, as Yaak's does.
   - assert_text: { id: method, text: "POST" }
-  - select: { id: request-tab, index: 2 }
-  - wait_for: { id: add-header }
-  - assert_text: { id: "header-name:1", text: "Content-Type" }
-  - assert_text: { id: "header-value:1", text: "application/json" }
-  - tap: { id: add-header }
-  - wait_for: { id: "header-name:2" }
-  - input: { id: "header-name:2", text: "X-Trace" }
-  - input: { id: "header-value:2", text: "${[ trace_id ]}" }
+  - select: { id: request_tab, index: 2 }
+  - wait_for: { id: add_header }
+  - assert_text: { id: "header_name:1", text: "Content-Type" }
+  - assert_text: { id: "header_value:1", text: "application/json" }
+  - tap: { id: add_header }
+  - wait_for: { id: "header_name:2" }
+  - input: { id: "header_name:2", text: "X-Trace" }
+  - input: { id: "header_value:2", text: "${[ trace_id ]}" }
   - wait_idle: {}
   - screenshot: headers
   # A row removed while its field still holds the last edit.
-  - tap: { id: "header-remove:2" }
+  - tap: { id: "header_remove:2" }
   - wait_idle: {}
-  - assert_missing: { id: "header-name:2" }
+  - assert_missing: { id: "header_name:2" }
 
   # URL parameters: a query pair and a value for a path placeholder.
-  - select: { id: request-tab, index: 1 }
-  - wait_for: { id: add-param }
-  - tap: { id: add-param }
-  - wait_for: { id: "param-name:1" }
-  - input: { id: "param-name:1", text: "page" }
-  - input: { id: "param-value:1", text: "2" }
+  - select: { id: request_tab, index: 1 }
+  - wait_for: { id: add_param }
+  - tap: { id: add_param }
+  - wait_for: { id: "param_name:1" }
+  - input: { id: "param_name:1", text: "page" }
+  - input: { id: "param_value:1", text: "2" }
   - wait_idle: {}
   - screenshot: params
 
   # The other body kinds: a form's fields, and a GraphQL query with its variables.
-  - select: { id: request-tab, index: 0 }
-  - wait_for: { id: body-kind }
-  - select: { id: body-kind, index: 5 }
-  - wait_for: { id: add-field }
-  - tap: { id: add-field }
-  - wait_for: { id: "form-name:1" }
-  - input: { id: "form-name:1", text: "title" }
-  - input: { id: "form-value:1", text: "Hello" }
+  - select: { id: request_tab, index: 0 }
+  - wait_for: { id: body_kind }
+  - select: { id: body_kind, index: 5 }
+  - wait_for: { id: add_field }
+  - tap: { id: add_field }
+  - wait_for: { id: "form_name:1" }
+  - input: { id: "form_name:1", text: "title" }
+  - input: { id: "form_value:1", text: "Hello" }
   - wait_idle: {}
   - screenshot: body-multipart
-  - select: { id: body-kind, index: 6 }
-  - wait_for: { id: graphql-query }
-  - input: { id: graphql-query, text: "query { viewer { login } }" }
+  - select: { id: body_kind, index: 6 }
+  - wait_for: { id: graphql_query }
+  - input: { id: graphql_query, text: "query { viewer { login } }" }
   - wait_idle: {}
   - screenshot: body-graphql
 
   # Authentication this client applies itself: Basic, Bearer and an API key.
-  - select: { id: request-tab, index: 3 }
-  - wait_for: { id: auth-kind }
-  - select: { id: auth-kind, index: 3 }
-  - wait_for: { id: auth-token }
-  - assert_text: { id: auth-prefix, text: "Bearer" }
-  - input: { id: auth-token, text: "${[ token ]}" }
-  - toggle: { id: auth-show, value: true }
+  - select: { id: request_tab, index: 3 }
+  - wait_for: { id: auth_kind }
+  - select: { id: auth_kind, index: 3 }
+  - wait_for: { id: auth_token }
+  - assert_text: { id: auth_prefix, text: "Bearer" }
+  - input: { id: auth_token, text: "${[ token ]}" }
+  - toggle: { id: auth_show, value: true }
   - wait_idle: {}
   - screenshot: auth-bearer
-  - select: { id: auth-kind, index: 4 }
-  - wait_for: { id: auth-location }
+  - select: { id: auth_kind, index: 4 }
+  - wait_for: { id: auth_location }
   - screenshot: auth-api-key
-  - select: { id: auth-kind, index: 3 }
+  - select: { id: auth_kind, index: 3 }
   - wait_idle: {}
 
   # What the request overrides of its folder's and workspace's send settings.
-  - select: { id: request-tab, index: 4 }
-  - wait_for: { id: set-redirects }
-  - select: { id: set-redirects, index: 2 }
-  - input: { id: set-timeout, text: "5000" }
+  - select: { id: request_tab, index: 4 }
+  - wait_for: { id: set_redirects }
+  - select: { id: set_redirects, index: 2 }
+  - input: { id: set_timeout, text: "5000" }
   - wait_idle: {}
   - screenshot: request-settings
-  - select: { id: request-tab, index: 0 }
+  - select: { id: request_tab, index: 0 }
   - wait_idle: {}
 
   # The layout button stacks the response under the request and back. Only the wide editor
   # has the split; on a phone the button is there but the picker's one-pane layout stays.
-  - toolbar: { item: tb-layout }
+  - toolbar: { item: tb_layout }
   - wait_idle: {}
   - screenshot: stacked
-  - toolbar: { item: tb-layout }
+  - toolbar: { item: tb_layout }
   - wait_idle: {}
 
   # The same host re-presented at a phone's width: the editor is a pushed layer with a
@@ -134,10 +134,10 @@ flow:
   - wait_idle: {}
   - screenshot: compact
   # At that width a header's name and value take a line each.
-  - select: { id: request-tab, index: 2 }
-  - wait_for: { id: add-header }
+  - select: { id: request_tab, index: 2 }
+  - wait_for: { id: add_header }
   - screenshot: compact-headers
-  - select: { id: request-tab, index: 0 }
+  - select: { id: request_tab, index: 0 }
   - wait_idle: {}
   - size_class: { width: auto }
   - wait_idle: {}
@@ -148,12 +148,12 @@ flow:
   # opened and where it lives.
   - navigate: { route: general, skip_on: [uikit, mdc, arkui, dom] }
   - navigate: { route: settings/general, only_on: [uikit, mdc, arkui, dom] }
-  - wait_for: { id: language-picker }
+  - wait_for: { id: language_picker }
   - screenshot: { name: settings, window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
   - screenshot: { name: settings, only_on: [uikit, mdc, arkui, dom] }
   - navigate: { route: data, skip_on: [uikit, mdc, arkui, dom] }
   - navigate: { route: settings/data, only_on: [uikit, mdc, arkui, dom] }
-  - wait_for: { id: data-dir }
+  - wait_for: { id: data_dir }
   - screenshot: { name: settings-data, window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
   - screenshot: { name: settings-data, only_on: [uikit, mdc, arkui, dom] }
   - close_window: { window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }

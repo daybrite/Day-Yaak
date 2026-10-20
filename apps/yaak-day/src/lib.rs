@@ -86,7 +86,7 @@ fn window_shell(prefs: Prefs) -> impl Piece {
                 prefs.nav_item(Some(SETTINGS.to_string())),
             ))
             .destination(|_: &Option<String>| ui::request_page())
-            .id("nav")
+            .id(day::id!(nav))
     })
 }
 
