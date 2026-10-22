@@ -37,7 +37,7 @@ pub fn root() -> impl Piece {
     // desktop gets the App menu's Settings… and About items and their windows; a phone the
     // Settings row of the navigation in `window_shell`.
     let prefs = Preferences::new()
-        .about(About::from_manifest().link(day::tr("day-about-website"), "https://yaak.app"))
+        .about(About::from_manifest().link(res::str::day_about_website(), "https://yaak.app"))
         .group(general_group(res::locales::ALL))
         .group(ui::data_group())
         .install();

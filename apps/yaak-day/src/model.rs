@@ -21,27 +21,27 @@ use yaak_models::models::{
 /// The methods the picker offers, in its order.
 pub(crate) const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 
-/// The request editor's tabs, by catalog key.
-pub(crate) const TABS: [&str; 5] = [
-    "tab_body",
-    "tab_params",
-    "tab_headers",
-    "tab_auth",
-    "tab_settings",
+/// The request editor's tabs, by title.
+pub(crate) const TABS: [fn() -> day::LocalizedText; 5] = [
+    crate::res::str::tab_body,
+    crate::res::str::tab_params,
+    crate::res::str::tab_headers,
+    crate::res::str::tab_auth,
+    crate::res::str::tab_settings,
 ];
 
-/// The body kinds the picker offers, by catalog key, and the `body_type` Yaak stores for each.
+/// The body kinds the picker offers, by title, and the `body_type` Yaak stores for each.
 /// Text kinds keep their text under `body.text`, the two forms their fields under `body.form`,
 /// GraphQL its `query` and `variables`, and a file upload its `filePath`.
-pub(crate) const BODY_KINDS: [&str; 8] = [
-    "body_none",
-    "body_json",
-    "body_text",
-    "body_xml",
-    "body_form",
-    "body_multipart",
-    "body_graphql",
-    "body_binary",
+pub(crate) const BODY_KINDS: [fn() -> day::LocalizedText; 8] = [
+    crate::res::str::body_none,
+    crate::res::str::body_json,
+    crate::res::str::body_text,
+    crate::res::str::body_xml,
+    crate::res::str::body_form,
+    crate::res::str::body_multipart,
+    crate::res::str::body_graphql,
+    crate::res::str::body_binary,
 ];
 const BODY_TYPES: [Option<&str>; 8] = [
     None,
@@ -65,14 +65,14 @@ pub(crate) mod body {
     pub const BINARY: usize = 7;
 }
 
-/// The authentication choices, by catalog key: what the folder or workspace gives, none, and
+/// The authentication choices, by title: what the folder or workspace gives, none, and
 /// the three types this client applies itself ([`NATIVE_AUTH_TYPES`], in the same order).
-pub(crate) const AUTH_KINDS: [&str; 5] = [
-    "auth_inherit",
-    "auth_none",
-    "auth_basic",
-    "auth_bearer",
-    "auth_apikey",
+pub(crate) const AUTH_KINDS: [fn() -> day::LocalizedText; 5] = [
+    crate::res::str::auth_inherit,
+    crate::res::str::auth_none,
+    crate::res::str::auth_basic,
+    crate::res::str::auth_bearer,
+    crate::res::str::auth_apikey,
 ];
 /// Indexes into [`AUTH_KINDS`], and one past it for a type only Yaak's plugins provide.
 pub(crate) mod auth {
@@ -84,17 +84,24 @@ pub(crate) mod auth {
     /// A plugin's type (OAuth 2, AWS, …): shown by name and kept exactly as stored.
     pub const FOREIGN: usize = 5;
 }
-/// Where an API key goes, by catalog key; Yaak stores `header` or `query`.
-pub(crate) const AUTH_LOCATIONS: [&str; 2] = ["auth_location_header", "auth_location_query"];
+/// Where an API key goes, by title; Yaak stores `header` or `query`.
+pub(crate) const AUTH_LOCATIONS: [fn() -> day::LocalizedText; 2] = [
+    crate::res::str::auth_location_header,
+    crate::res::str::auth_location_query,
+];
 
-/// A setting the request may leave to its folder and workspace, by catalog key.
-pub(crate) const TRI_STATE: [&str; 3] = ["setting_inherit", "setting_on", "setting_off"];
-/// The HTTP version choices, by catalog key.
-pub(crate) const HTTP_VERSIONS: [&str; 4] = [
-    "setting_inherit",
-    "http_version_auto",
-    "http_version_1",
-    "http_version_2",
+/// A setting the request may leave to its folder and workspace, by title.
+pub(crate) const TRI_STATE: [fn() -> day::LocalizedText; 3] = [
+    crate::res::str::setting_inherit,
+    crate::res::str::setting_on,
+    crate::res::str::setting_off,
+];
+/// The HTTP version choices, by title.
+pub(crate) const HTTP_VERSIONS: [fn() -> day::LocalizedText; 4] = [
+    crate::res::str::setting_inherit,
+    crate::res::str::http_version_auto,
+    crate::res::str::http_version_1,
+    crate::res::str::http_version_2,
 ];
 
 /// One request as the list shows it.

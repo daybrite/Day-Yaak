@@ -108,10 +108,10 @@ pub(crate) fn method_color(method: &str) -> Color {
 }
 
 /// A picker's options over one of the model's tables, by position: the model keeps each choice
-/// as an index into its table (`body::JSON`, `auth::BEARER`, …), and the titles are the keys'
-/// localized text.
-fn indexed(keys: &'static [&'static str]) -> Vec<(usize, LocalizedText)> {
-    keys.iter().enumerate().map(|(i, k)| (i, tr(k))).collect()
+/// as an index into its table (`body::JSON`, `auth::BEARER`, …), and each entry is the generated
+/// accessor for that choice's title.
+fn indexed(titles: &'static [fn() -> LocalizedText]) -> Vec<(usize, LocalizedText)> {
+    titles.iter().enumerate().map(|(i, title)| (i, title())).collect()
 }
 
 /// As [`indexed`], for a table whose entries are their own titles (the HTTP methods).
@@ -534,7 +534,7 @@ fn params_tab(scene: Scene) -> impl Piece {
 /// The picker's choices, by position: the fixed ones, and a stored plugin type under its own
 /// name at [`auth::FOREIGN`].
 fn auth_choices(scene: Scene) -> Vec<(usize, String)> {
-    let mut choices: Vec<String> = AUTH_KINDS.iter().map(|k| tr(k).format()).collect();
+    let mut choices: Vec<String> = AUTH_KINDS.iter().map(|title| title().format()).collect();
     let foreign = scene.auth_foreign.get();
     if !foreign.is_empty() {
         choices.push(foreign);

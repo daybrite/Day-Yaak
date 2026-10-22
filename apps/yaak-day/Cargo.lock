@@ -113,7 +113,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -124,7 +124,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -670,7 +670,7 @@ checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
 name = "day"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-android",
  "day-appkit",
@@ -693,11 +693,13 @@ dependencies = [
  "day-uikit",
  "day-xaml",
  "log",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
 name = "day-android"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-macros",
@@ -711,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "day-appkit"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "block2",
  "day-build",
@@ -734,7 +736,7 @@ dependencies = [
 
 [[package]]
 name = "day-arkui"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-bridge",
  "day-build",
@@ -754,11 +756,11 @@ dependencies = [
 
 [[package]]
 name = "day-async"
-version = "0.5.1"
+version = "0.6.0"
 
 [[package]]
 name = "day-bridge"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-async",
  "day-macros",
@@ -767,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "day-build"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cc",
  "day-fonts",
@@ -777,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "day-core"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -787,6 +789,7 @@ dependencies = [
  "day-macros",
  "day-reactive",
  "day-spec",
+ "inventory",
  "linkme",
  "log",
  "slotmap",
@@ -794,11 +797,11 @@ dependencies = [
 
 [[package]]
 name = "day-dbus"
-version = "0.5.1"
+version = "0.6.0"
 
 [[package]]
 name = "day-dom"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-geometry",
@@ -810,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "day-fluent"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-l10n",
@@ -819,16 +822,17 @@ dependencies = [
 
 [[package]]
 name = "day-fonts"
-version = "0.5.1"
+version = "0.6.0"
 
 [[package]]
 name = "day-geometry"
-version = "0.5.1"
+version = "0.6.0"
 
 [[package]]
 name = "day-gtk"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
+ "cairo-rs",
  "day-core",
  "day-dbus",
  "day-pieces",
@@ -850,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "day-l10n"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-reactive",
  "fluent-bundle",
@@ -869,7 +873,7 @@ dependencies = [
 
 [[package]]
 name = "day-macos-tabs"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-reactive",
@@ -881,11 +885,11 @@ dependencies = [
 
 [[package]]
 name = "day-macros"
-version = "0.5.1"
+version = "0.6.0"
 
 [[package]]
 name = "day-mock"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-async",
  "day-spec",
@@ -893,7 +897,7 @@ dependencies = [
 
 [[package]]
 name = "day-model"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-reactive",
  "uuid",
@@ -901,7 +905,7 @@ dependencies = [
 
 [[package]]
 name = "day-part-clipboard"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "base64 0.23.1",
  "day-android",
@@ -916,14 +920,14 @@ dependencies = [
 
 [[package]]
 name = "day-part-fs"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-async",
 ]
 
 [[package]]
 name = "day-part-prefs"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-android",
  "day-bridge",
@@ -936,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "day-piece-settings"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cc",
  "day-build",
@@ -955,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "day-piece-texteditor"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cc",
  "day-core",
@@ -969,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "day-pieces"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-geometry",
@@ -986,7 +990,7 @@ dependencies = [
 
 [[package]]
 name = "day-qt"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-dbus",
@@ -1001,14 +1005,14 @@ dependencies = [
 
 [[package]]
 name = "day-qt-sys"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cc",
 ]
 
 [[package]]
 name = "day-reactive"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "log",
  "slotmap",
@@ -1016,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "day-script"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-fluent",
@@ -1030,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "day-script-proto"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1039,7 +1043,7 @@ dependencies = [
 
 [[package]]
 name = "day-spec"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-fonts",
  "day-geometry",
@@ -1049,11 +1053,11 @@ dependencies = [
 
 [[package]]
 name = "day-toolchain"
-version = "0.5.1"
+version = "0.6.0"
 
 [[package]]
 name = "day-uikit"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "block2",
  "day-core",
@@ -1072,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "day-xaml"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "day-core",
  "day-l10n",
@@ -1086,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "day-xaml-sys"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "cc",
  "day-toolchain",
@@ -1174,7 +1178,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1245,7 +1249,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1608,7 +1612,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps 9.0.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2405,6 +2409,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "078ea7b7c29a2b4df841a7f6ac8775ff6074020c6776d48491ce2268e068f972"
 dependencies = [
  "unic-langid",
+]
+
+[[package]]
+name = "inventory"
+version = "0.3.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6928282826c822ad91bf1c9a1cb90a30ba1c26770749929b4656cd6be829cd7c"
+dependencies = [
+ "rustversion",
 ]
 
 [[package]]
@@ -3880,7 +3893,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3945,7 +3958,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4304,7 +4317,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4454,10 +4467,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5055,7 +5068,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
