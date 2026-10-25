@@ -124,8 +124,7 @@ mod tests {
         assert!(flow_columns.contains(&"response_truncated".to_string()));
         assert!(!flow_columns.iter().any(|c| c.contains("body")), "{flow_columns:?}");
 
-        let journal_mode: String =
-            conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert_eq!(journal_mode, "wal");
     }
 }

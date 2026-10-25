@@ -58,7 +58,9 @@ async fn spawn_upstream() -> SocketAddr {
     tokio::spawn(async move {
         loop {
             let (tcp, _) = listener.accept().await.unwrap();
-            tokio::spawn(http1::Builder::new().serve_connection(TokioIo::new(tcp), service_fn(route)));
+            tokio::spawn(
+                http1::Builder::new().serve_connection(TokioIo::new(tcp), service_fn(route)),
+            );
         }
     });
     addr

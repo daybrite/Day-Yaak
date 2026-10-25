@@ -334,8 +334,9 @@ impl Engine {
 /// (`<platform app data>/<id>/db.sqlite`, where the `yaak` CLI looks too), else this client's
 /// own. A phone's sandbox holds no other application's data and takes the fallback.
 fn choose_data_dir() -> (PathBuf, bool) {
-    let own =
-        day_part_filesystem::data_dir().map(|d| d.join(OWN_DIR)).unwrap_or_else(|_| PathBuf::from(OWN_DIR));
+    let own = day_part_filesystem::data_dir()
+        .map(|d| d.join(OWN_DIR))
+        .unwrap_or_else(|_| PathBuf::from(OWN_DIR));
     // A host that names the data directory (a scripted run, CI) gets a store of its own: a
     // walkthrough must never edit the desktop app's workspaces.
     let redirected = std::env::var_os("DAY_DATA_DIR").is_some_and(|d| !d.is_empty());

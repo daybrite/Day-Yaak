@@ -23,7 +23,8 @@ pub async fn read_body(
     body: FlowBody,
 ) -> Result<Vec<u8>, String> {
     let raw = read_raw_body(blobs, &flow.id, body)?;
-    let encoding = ContentEncoding::from_header(find_header(flow.headers(body), "content-encoding"));
+    let encoding =
+        ContentEncoding::from_header(find_header(flow.headers(body), "content-encoding"));
     if encoding == ContentEncoding::Identity {
         return Ok(raw);
     }

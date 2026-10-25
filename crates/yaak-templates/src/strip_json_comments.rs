@@ -311,8 +311,10 @@ mod tests {
     fn test_unterminated_quote_closes_tag_at_first_bracket() {
         // A half-typed string must not swallow the rest of the document
         assert_eq!(
-            strip_json_comments(r#"{"foo": ${[ fn(a='oops ]}, "bar": 1 // gone
-}"#),
+            strip_json_comments(
+                r#"{"foo": ${[ fn(a='oops ]}, "bar": 1 // gone
+}"#
+            ),
             r#"{"foo": ${[ fn(a='oops ]}, "bar": 1
 }"#
         );
