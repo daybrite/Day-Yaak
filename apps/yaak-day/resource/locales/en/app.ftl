@@ -1,4 +1,4 @@
-# Yaak for Day: UI strings (https://daybrite.dev/docs/localization). Add a locale by dropping a
+# Yaak for Day: UI strings (https://daybrite.dev/docs/how-to/localization). Add a locale by dropping a
 # sibling folder (e.g. locales/fr/app.ftl) and translating.
 #
 # The appearance and language rows on the Settings page label themselves from Day's own catalog,

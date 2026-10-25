@@ -1,4 +1,4 @@
-# The store listing (https://daybrite.dev/docs/store): everything the App Store, Google Play
+# The store listing (https://daybrite.dev/docs/how-to/store): everything the App Store, Google Play
 # and the app's website show, in this one file. `day store stage` turns it into the layouts App
 # Store Connect and Google Play expect, under build/day/store/<target>/, ready for
 # `fastlane deliver` / `fastlane supply`; `day store export` writes it resolved as JSON for the
@@ -46,7 +46,7 @@ support-url = "https://github.com/daybrite/Day-Yaak/issues"
 # promo = "…"                                          # App Store promotional text, ≤170
 
 # Which captures the store listings and the website show, by the names of `screenshot:` steps in
-# dayscript/ (https://daybrite.dev/docs/store#screenshots). Per target, `screenshots` is the
+# dayscript/ (https://daybrite.dev/docs/how-to/store#screenshots). Per target, `screenshots` is the
 # website's page for that target (one row per device kind, `default` for the rest) and the
 # stores' fallback; a store lists device kinds or its own `default`. A name is the light capture;
 # { name = "…", theme = "dark" } the dark one.
@@ -54,5 +54,5 @@ support-url = "https://github.com/daybrite/Day-Yaak/issues"
 # default = ["home"]
 # [storefront.ios-uikit.apple-app-store.screenshots]
 # iphone = ["home", { name = "settings", theme = "dark" }]
-# [storefront.android-mdc.google-play-store.screenshots]
+# [storefront.android-material.google-play-store.screenshots]
 # default = ["home", "settings"]

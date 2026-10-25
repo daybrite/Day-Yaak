@@ -14,14 +14,14 @@ use crate::model::Scene;
 day::day_start!(options: window(), root);
 
 /// Options for every window. The catalog and title go to `launch`, which installs them
-/// (https://daybrite.dev/docs/localization).
+/// (https://daybrite.dev/docs/how-to/localization).
 pub fn window() -> day::WindowOptions {
     // The generated options carry the catalog, the title and the version (named in Day's exit
-    // line, https://daybrite.dev/docs/lifecycle); the size is desktop only, phones fill the screen.
+    // line, https://daybrite.dev/docs/explanation/lifecycle); the size is desktop only, phones fill the screen.
     res::window_options().size(1100.0, 720.0)
 }
 
-// Typed names for everything under `resource/` (https://daybrite.dev/docs/resources).
+// Typed names for everything under `resource/` (https://daybrite.dev/docs/how-to/resources).
 day::resources!();
 
 /// The nav key of the Settings row, where there is no menu bar to hold Settings.
@@ -32,7 +32,7 @@ pub fn root() -> impl Piece {
     info!("Yaak for Day starting");
     // Open the store before the first window, so a failure shows up at launch.
     let _ = engine::engine();
-    // Settings and About (https://daybrite.dev/docs/settings): appearance and language from
+    // Settings and About (https://daybrite.dev/docs/reference/settings): appearance and language from
     // Day's catalog, the Data group (ui.rs), the app's name and version from Day.toml. A
     // desktop gets the App menu's Settings… and About items and their windows; a phone the
     // Settings row of the navigation in `window_shell`.
@@ -65,7 +65,7 @@ fn window_shell(prefs: Prefs) -> impl Piece {
         });
         // Workspaces in the sidebar, the workspace's requests as the content list, the open
         // request as the detail: a sidebar on a desktop, three pushed layers on a phone
-        // (https://daybrite.dev/docs/navigation).
+        // (https://daybrite.dev/docs/how-to/navigation).
         nav(scene.section)
             .style(NavStyle::Sidebar)
             .title(res::str::app_title())
@@ -82,7 +82,7 @@ fn window_shell(prefs: Prefs) -> impl Piece {
                     |w: &yaak_models::models::Workspace| item(w.id.clone(), w.name.clone()),
                 ),
                 // Use the desktop's App menu Settings… item; without a menu bar, keep Settings
-                // reachable as a navigation row (https://daybrite.dev/docs/settings).
+                // reachable as a navigation row (https://daybrite.dev/docs/reference/settings).
                 prefs.nav_item(Some(SETTINGS.to_string())),
             ))
             .destination(|_: &Option<String>| ui::request_page())

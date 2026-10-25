@@ -3,7 +3,7 @@
 //! Yaak keeps its workspaces, requests and responses in SQLite through `yaak-models`, and
 //! sends requests through `yaak`'s send pipeline, which is async over tokio. Day runs no
 //! tokio, so this module owns one runtime on background threads and is the only place that
-//! touches it (https://daybrite.dev/docs/async, rule 4). The database is read and written
+//! touches it (https://daybrite.dev/docs/explanation/async, rule 4). The database is read and written
 //! synchronously, on whichever thread asks; a send runs on the runtime inside a
 //! `day::spawn_blocking` job, so the UI awaits its outcome like any other future.
 //!
@@ -335,13 +335,13 @@ impl Engine {
 /// own. A phone's sandbox holds no other application's data and takes the fallback.
 fn choose_data_dir() -> (PathBuf, bool) {
     let own =
-        day_part_fs::data_dir().map(|d| d.join(OWN_DIR)).unwrap_or_else(|_| PathBuf::from(OWN_DIR));
+        day_part_filesystem::data_dir().map(|d| d.join(OWN_DIR)).unwrap_or_else(|_| PathBuf::from(OWN_DIR));
     // A host that names the data directory (a scripted run, CI) gets a store of its own: a
     // walkthrough must never edit the desktop app's workspaces.
     let redirected = std::env::var_os("DAY_DATA_DIR").is_some_and(|d| !d.is_empty());
     if !redirected
         && cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows"))
-        && let Ok(root) = day_part_fs::platform_data_dir()
+        && let Ok(root) = day_part_filesystem::platform_data_dir()
     {
         let desktop = root.join(DESKTOP_APP_ID);
         if desktop.join("db.sqlite").is_file() {

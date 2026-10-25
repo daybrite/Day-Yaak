@@ -7,13 +7,13 @@ build = "build.rs"
 
 [features]
 # `mock` keeps bare cargo and rust-analyzer compiling; `day build` overrides it with
-# `--no-default-features --features <backend>` (https://daybrite.dev/docs/project-structure).
+# `--no-default-features --features <backend>` (https://daybrite.dev/docs/reference/project-structure).
 default = ["mock"]
 appkit = ["day/appkit"]
 gtk = ["day/gtk"]
 qt = ["day/qt"]
 uikit = ["day/uikit"]
-mdc = ["day/mdc"]
+material = ["day/material"]
 xaml = ["day/xaml"]
 winui = ["day/winui"]
 arkui = ["day/arkui"]
@@ -31,8 +31,8 @@ day = { git = "https://github.com/daybrite/day.git", features = ["model"] }
 day-piece-settings = { git = "https://github.com/daybrite/day.git" }
 # The styled editor (docs/texteditor.md): request bodies and response bodies, syntax-highlighted
 # by the piece's own tokenizers, in each platform's rich-text view.
-day-piece-texteditor = { git = "https://github.com/daybrite/day.git" }
-day-part-fs = { git = "https://github.com/daybrite/day.git" }
+day-piece-text-editor = { git = "https://github.com/daybrite/day.git" }
+day-part-filesystem = { git = "https://github.com/daybrite/day.git" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -46,7 +46,7 @@ yaak-models = { path = "../../crates/yaak-models" }
 yaak-templates = { path = "../../crates/yaak-templates" }
 yaak-tls = { path = "../../crates/yaak-tls" }
 # Yaak's engine is async over tokio. Day has no runtime of its own, so this app owns one on a
-# background thread (https://daybrite.dev/docs/async, rule 4) and hands results back through
+# background thread (https://daybrite.dev/docs/explanation/async, rule 4) and hands results back through
 # `Setter`.
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 async-trait = "0.1"
@@ -65,7 +65,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 # reqwest reads the system proxy through SystemConfiguration, whose link directive is inside
 # the Rust static library and does not reach the Xcode link; declaring it here does
-# (https://daybrite.dev/docs/extending, the macOS table).
+# (https://daybrite.dev/contributing/extending, the macOS table).
 [package.metadata.day.macos]
 frameworks = ["SystemConfiguration"]
 

@@ -9,8 +9,8 @@ use crate::model::{
 use crate::res;
 use day::prelude::*;
 use day_piece_settings::prelude::*;
-use day_piece_texteditor::highlight::{Language, Palette, highlight_with_templates, highlighter};
-use day_piece_texteditor::text_editor_text;
+use day_piece_text_editor::highlight::{Language, Palette, highlight_with_templates, highlighter};
+use day_piece_text_editor::text_editor_text;
 
 /// The pushed editor's bar title: the open request's name, or the workspace's while none is.
 pub(crate) fn detail_title(scene: Scene) -> String {
@@ -903,7 +903,7 @@ fn response_timeline(rows: Vec<TimelineRow>) -> impl Piece {
 
 // ---- settings ---------------------------------------------------------------------------------
 
-/// The Data group of Settings (https://daybrite.dev/docs/settings): which store this client
+/// The Data group of Settings (https://daybrite.dev/docs/reference/settings): which store this client
 /// opened, the desktop app's or its own, and where it lives. Appearance and language are Day's
 /// own General group (lib.rs).
 pub(crate) fn data_group() -> Group {

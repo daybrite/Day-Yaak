@@ -61,7 +61,7 @@ The steps, in the order they happened, so another Tauri project can follow them.
    `yaak_lifecycle::on_launch`, keeps a two-worker tokio runtime, and sends a request on a thread
    that blocks on `send_http_request`; the result reaches the window through a `Setter`.
 
-3. **Choose where the data lives.** `day_part_fs::platform_data_dir()` names the platform's
+3. **Choose where the data lives.** `day_part_filesystem::platform_data_dir()` names the platform's
    application-data directory; Yaak desktop's store is `app.yaak.desktop/db.sqlite` under it.
    On a desktop the client opens that when it exists, otherwise, and on every phone, it opens a
    store of its own under Day's data directory. A host that sets `DAY_DATA_DIR` (a scripted run,
@@ -102,7 +102,7 @@ Everything below runs in `apps/yaak-day/`.
 day doctor
 day launch -t macos-appkit                             # build and run
 day launch -t ios-uikit --ios-simulator <simulator-id>
-day launch -t android-mdc --android-device <serial>
+day launch -t android-material --android-device <serial>
 day launch -t macos-appkit --script dayscript/demo.yaml # the walkthrough, with screenshots
 ```
 

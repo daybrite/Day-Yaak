@@ -55,7 +55,7 @@ where it lives.
 day doctor
 day launch -t macos-appkit                           # build + run
 day launch -t ios-uikit --ios-simulator <simulator-id>
-day launch -t android-mdc --android-device <serial>
+day launch -t android-material --android-device <serial>
 day launch -t macos-appkit --script dayscript/demo.yaml   # the walkthrough, with screenshots
 ```
 

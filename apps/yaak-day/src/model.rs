@@ -995,7 +995,7 @@ impl Scene {
     }
 
     /// Ask for a file and hand its path to `picked`. Every platform's picker answers with a
-    /// path the engine can read (https://daybrite.dev/docs/files).
+    /// path the engine can read (https://daybrite.dev/docs/reference/files).
     fn pick_file(self, picked: impl FnOnce(String) + 'static) {
         day::task(async move {
             if let Some(file) = open_file().await

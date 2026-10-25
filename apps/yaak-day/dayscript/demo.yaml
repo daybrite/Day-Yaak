@@ -1,4 +1,4 @@
-# The walkthrough (https://daybrite.dev/docs/dayscript): drives the running app by element id
+# The walkthrough (https://daybrite.dev/docs/how-to/dayscript): drives the running app by element id
 # on any target, and doubles as its test. It sends nothing: the example workspace's requests
 # point at a public demo API, and a CI leg should not depend on it.
 #
@@ -142,18 +142,18 @@ flow:
   - size_class: { width: auto }
   - wait_idle: {}
 
-  # Settings (https://daybrite.dev/docs/settings): the window the App menu opens on a desktop,
+  # Settings (https://daybrite.dev/docs/reference/settings): the window the App menu opens on a desktop,
   # where a group's own id routes to its tab; the nav's Settings row on a phone, where
   # `settings/<group>` pushes the group's page. The Data group says which store this client
   # opened and where it lives.
-  - navigate: { route: general, skip_on: [uikit, mdc, arkui, dom] }
-  - navigate: { route: settings/general, only_on: [uikit, mdc, arkui, dom] }
+  - navigate: { route: general, skip_on: [uikit, material, arkui, dom] }
+  - navigate: { route: settings/general, only_on: [uikit, material, arkui, dom] }
   - wait_for: { id: language_picker }
-  - screenshot: { name: settings, window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
-  - screenshot: { name: settings, only_on: [uikit, mdc, arkui, dom] }
-  - navigate: { route: data, skip_on: [uikit, mdc, arkui, dom] }
-  - navigate: { route: settings/data, only_on: [uikit, mdc, arkui, dom] }
+  - screenshot: { name: settings, window: day.preferences, skip_on: [uikit, material, arkui, dom] }
+  - screenshot: { name: settings, only_on: [uikit, material, arkui, dom] }
+  - navigate: { route: data, skip_on: [uikit, material, arkui, dom] }
+  - navigate: { route: settings/data, only_on: [uikit, material, arkui, dom] }
   - wait_for: { id: data_dir }
-  - screenshot: { name: settings-data, window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
-  - screenshot: { name: settings-data, only_on: [uikit, mdc, arkui, dom] }
-  - close_window: { window: day.preferences, skip_on: [uikit, mdc, arkui, dom] }
+  - screenshot: { name: settings-data, window: day.preferences, skip_on: [uikit, material, arkui, dom] }
+  - screenshot: { name: settings-data, only_on: [uikit, material, arkui, dom] }
+  - close_window: { window: day.preferences, skip_on: [uikit, material, arkui, dom] }

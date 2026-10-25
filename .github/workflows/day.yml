@@ -29,7 +29,7 @@ jobs:
     secrets: inherit
     with:
       project-path: apps/yaak-day
-      targets: macos-appkit, macos-gtk, macos-qt, linux-gtk, linux-qt, windows-winui, ios-uikit, android-mdc, harmony-arkui
+      targets: macos-appkit, macos-gtk, macos-qt, linux-gtk, linux-qt, windows-winui, ios-uikit, android-material, harmony-arkui
       # Build against the tip of the day branch the app tracks, not the revision the committed
       # lock pins: a sample app exists to prove the current framework still builds it, and a
       # lock left at an older revision would silently stop testing day at all. The revision is

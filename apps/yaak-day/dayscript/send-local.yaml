@@ -1,4 +1,4 @@
-# Real sends, against a server on this machine (https://daybrite.dev/docs/dayscript). Each path
+# Real sends, against a server on this machine (https://daybrite.dev/docs/how-to/dayscript). Each path
 # of the server answers with one fact about the request it received, so every assertion below
 # is about what went over the wire:
 #
