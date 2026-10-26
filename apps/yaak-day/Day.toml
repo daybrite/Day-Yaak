@@ -6,7 +6,7 @@ schema = 1
 id = "dev.daybrite.yaak"
 title = "Yaak"
 build = 1
-targets = ["macos-appkit", "macos-gtk", "macos-qt", "linux-gtk", "linux-qt", "windows-winui", "windows-qt", "windows-gtk", "ios-uikit", "android-material", "harmony-arkui"]
+targets = ["macos-appkit", "macos-gtk", "macos-qt", "linux-gtk", "linux-qt", "windows-winui", "ios-uikit", "android-material", "harmony-arkui"]
 
 # The window's geometry in points (https://daybrite.dev/docs/reference/size-classes). `width`/`height` are
 # the desktop default and the size a desktop-windowing Android window opens at; the minimum is

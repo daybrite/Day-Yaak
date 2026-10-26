@@ -13,6 +13,11 @@ on:
       - "crates/**"
       - ".github/workflows/day.yml"
   workflow_dispatch:
+    inputs:
+      day-main:
+        description: Build against day's main branch instead of the newest release
+        type: boolean
+        default: false
   schedule:
     - cron: "20 6 * * *"
 
@@ -35,7 +40,7 @@ jobs:
       # lock left at an older revision would silently stop testing day at all. The revision is
       # resolved once per run, so every leg compiles the same one. Refresh the lock locally
       # (`cargo update -p day`) when a new framework API lands, so a local build matches.
-      update-day-deps: true
+      day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
       scripts: dayscript/demo.yaml
       # Yaak's own crates are upstream code this fork does not maintain; the Day project
       # depends on them by path, so the formatting check names only its own package.

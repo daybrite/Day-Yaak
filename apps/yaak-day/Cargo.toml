@@ -27,12 +27,12 @@ name = "dayapp"
 crate-type = ["rlib"]
 
 [dependencies]
-day = { git = "https://github.com/daybrite/day.git", features = ["model"] }
-day-piece-settings = { git = "https://github.com/daybrite/day.git" }
+day = { package = "day-app", version = "0.6", features = ["model"] }
+day-piece-settings = "0.6"
 # The styled editor (docs/texteditor.md): request bodies and response bodies, syntax-highlighted
 # by the piece's own tokenizers, in each platform's rich-text view.
-day-piece-text-editor = { git = "https://github.com/daybrite/day.git" }
-day-part-filesystem = { git = "https://github.com/daybrite/day.git" }
+day-piece-text-editor = "0.6"
+day-part-filesystem = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -73,7 +73,7 @@ frameworks = ["SystemConfiguration"]
 frameworks = ["SystemConfiguration"]
 
 [build-dependencies]
-day-build = { git = "https://github.com/daybrite/day.git" }
+day-build = "0.6"
 
 # Its own workspace: a package nested inside Yaak's workspace without being a member fails
 # every cargo command. The Yaak crates above still resolve their `workspace = true`
