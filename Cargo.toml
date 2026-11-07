@@ -77,42 +77,42 @@ tokio = "1.48.0"
 ts-rs = "11.1.0"
 
 # Internal crates - common/foundation
-yaak-database = { path = "crates/common/yaak-database" }
-yaak-rpc = { path = "crates/common/yaak-rpc" }
-yaak-rpc-schema = { path = "crates/common/yaak-rpc-schema" }
+yaak-database = { version = "0.*", path = "crates/common/yaak-database" }
+yaak-rpc = { version = "0.*", path = "crates/common/yaak-rpc" }
+yaak-rpc-schema = { version = "0.*", path = "crates/common/yaak-rpc-schema" }
 
 # Internal crates - shared
-yaak-core = { path = "crates/yaak-core" }
-yaak = { path = "crates/yaak" }
-yaak-commands = { path = "crates/yaak-commands" }
-yaak-common = { path = "crates/yaak-common" }
-yaak-crypto = { path = "crates/yaak-crypto" }
-yaak-filter = { path = "crates/yaak-filter" }
-yaak-git = { path = "crates/yaak-git" }
-yaak-grpc = { path = "crates/yaak-grpc" }
-yaak-http = { path = "crates/yaak-http" }
-yaak-lifecycle = { path = "crates/yaak-lifecycle" }
-yaak-mcp = { path = "crates/yaak-mcp" }
-yaak-models = { path = "crates/yaak-models" }
-yaak-plugins = { path = "crates/yaak-plugins" }
-yaak-sse = { path = "crates/yaak-sse" }
-yaak-sync = { path = "crates/yaak-sync" }
-yaak-templates = { path = "crates/yaak-templates" }
-yaak-tls = { path = "crates/yaak-tls" }
-yaak-ws = { path = "crates/yaak-ws" }
-yaak-api = { path = "crates/yaak-api" }
-yaak-proxy = { path = "crates/yaak-proxy" }
+yaak-core = { version = "0.*", path = "crates/yaak-core" }
+yaak = { version = "0.*", path = "crates/yaak" }
+yaak-commands = { version = "0.*", path = "crates/yaak-commands" }
+yaak-common = { version = "0.*", path = "crates/yaak-common" }
+yaak-crypto = { version = "0.*", path = "crates/yaak-crypto" }
+yaak-filter = { version = "0.*", path = "crates/yaak-filter" }
+yaak-git = { version = "0.*", path = "crates/yaak-git" }
+yaak-grpc = { version = "0.*", path = "crates/yaak-grpc" }
+yaak-http = { version = "0.*", path = "crates/yaak-http" }
+yaak-lifecycle = { version = "0.*", path = "crates/yaak-lifecycle" }
+yaak-mcp = { version = "0.*", path = "crates/yaak-mcp" }
+yaak-models = { version = "0.*", path = "crates/yaak-models" }
+yaak-plugins = { version = "0.*", path = "crates/yaak-plugins" }
+yaak-sse = { version = "0.*", path = "crates/yaak-sse" }
+yaak-sync = { version = "0.*", path = "crates/yaak-sync" }
+yaak-templates = { version = "0.*", path = "crates/yaak-templates" }
+yaak-tls = { version = "0.*", path = "crates/yaak-tls" }
+yaak-ws = { version = "0.*", path = "crates/yaak-ws" }
+yaak-api = { version = "0.*", path = "crates/yaak-api" }
+yaak-proxy = { version = "0.*", path = "crates/yaak-proxy" }
 
 # Internal crates - proxy
-yaak-proxy-lib = { path = "crates-proxy/yaak-proxy-lib" }
+yaak-proxy-lib = { version = "0.*", path = "crates-proxy/yaak-proxy-lib" }
 
 # Internal crates - Tauri-specific
-yaak-fonts = { path = "crates-tauri/yaak-fonts" }
-yaak-license = { path = "crates-tauri/yaak-license" }
-yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
-yaak-system-appearance = { path = "crates-tauri/yaak-system-appearance" }
-yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
-yaak-window = { path = "crates-tauri/yaak-window" }
+yaak-fonts = { version = "0.*", path = "crates-tauri/yaak-fonts" }
+yaak-license = { version = "0.*", path = "crates-tauri/yaak-license" }
+yaak-mac-window = { version = "0.*", path = "crates-tauri/yaak-mac-window" }
+yaak-system-appearance = { version = "0.*", path = "crates-tauri/yaak-system-appearance" }
+yaak-tauri-utils = { version = "0.*", path = "crates-tauri/yaak-tauri-utils" }
+yaak-window = { version = "0.*", path = "crates-tauri/yaak-window" }
 
 [profile.release]
 strip = false

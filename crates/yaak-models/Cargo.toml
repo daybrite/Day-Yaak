@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 urlencoding = "2.1.3"
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 yaak-core = { workspace = true }
-yaak-templates = { path = "../yaak-templates", default-features = false }
+yaak-templates = { version = "0.*", path = "../yaak-templates", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 r2d2 = "0.8.10"
