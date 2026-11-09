@@ -34,7 +34,7 @@ pub(crate) fn request_list_pane() -> impl Piece {
             }
         },
     );
-    request_list(scene).grow().toolbar(
+    request_list(scene).grow(Dimension::Both).toolbar(
         toolbar_button(day::id!(tb_new), res::str::cmd_new_request())
             .icon(Symbol::Add)
             .tooltip(res::str::cmd_new_request())
@@ -85,7 +85,7 @@ fn request_row(scene: Scene, slot: ItemSlot<RequestRow, String>) -> impl Piece {
         ))
         .spacing(1.0)
         .align(HAlign::Leading)
-        .grow(),
+        .grow(Dimension::Both),
     ))
     .spacing(Space::S)
     .align(VAlign::Center)
@@ -131,7 +131,7 @@ pub(crate) fn request_page() -> impl Piece {
         // and bindings.
         keyed(move || scene.selected.get(), move |_| editor(scene)),
     ))
-    .grow()
+    .grow(Dimension::Both)
     // Derived, not fixed: the layout button's glyph shows the arrangement a press gives, so
     // the items are rebuilt whenever `stacked` flips.
     .toolbar(move || {
@@ -163,25 +163,21 @@ pub(crate) fn request_page() -> impl Piece {
 }
 
 fn empty_state(scene: Scene) -> impl Piece {
-    column((
-        spacer(),
-        label(move || {
-            if scene.requests.get().is_empty() {
-                res::str::empty_workspace().format()
-            } else {
-                res::str::empty_selection().format()
-            }
-        })
-        .font(Font::Title3)
-        .secondary()
-        .align(TextAlign::Center)
-        .id(day::id!(empty_state)),
-        spacer(),
-    ))
-    .align(HAlign::Center)
-    .grow()
+    label(move || {
+        if scene.requests.get().is_empty() {
+            res::str::empty_workspace().format()
+        } else {
+            res::str::empty_selection().format()
+        }
+    })
+    .font(Font::Title3)
+    .secondary()
+    .align(TextAlign::Center)
+    .id(day::id!(empty_state))
+    .aligned(Alignment::Center)
+    .grow(Dimension::Both)
     .padding(Space::XL)
-    .grow()
+    .grow(Dimension::Both)
 }
 
 fn editor(scene: Scene) -> impl Piece {
@@ -205,7 +201,7 @@ fn editor(scene: Scene) -> impl Piece {
                     })
                     .fraction(scene.split)
                     .id(day::id!(editor_split))
-                    .grow()
+                    .grow(Dimension::Both)
             },
         )
         .otherwise(move || {
@@ -228,15 +224,15 @@ fn editor(scene: Scene) -> impl Piece {
                 switch(
                     move || scene.pane.get(),
                     move |pane| match pane {
-                        0 => request_pane(scene).grow().any(),
-                        _ => response_pane(scene).grow().any(),
+                        0 => request_pane(scene).grow(Dimension::Both).any(),
+                        _ => response_pane(scene).grow(Dimension::Both).any(),
                     },
                 ),
             ))
-            .grow()
+            .grow(Dimension::Both)
         }),
     ))
-    .grow()
+    .grow(Dimension::Both)
 }
 
 /// Method, URL and Send, on one line. Return in the URL field sends too, and while a send is
@@ -252,7 +248,7 @@ fn url_bar(scene: Scene) -> impl Piece {
             .on_submit(move || scene.send())
             .highlight(highlighter(Language::Plain, Palette::default(), true))
             .id(day::id!(url))
-            .grow(),
+            .grow(Dimension::Both),
         button(move || {
             if scene.sending.get() {
                 res::str::cmd_cancel().format()
@@ -371,7 +367,7 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
                 text_field(slot.name())
                     .placeholder(res::str::pair_name_hint())
                     .id((ids.name)(key.to_string()))
-                    .grow(),
+                    .grow(Dimension::Both),
             ))
             .spacing(6.0)
             .align(VAlign::Center);
@@ -393,7 +389,7 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
                         .secondary()
                         .id((ids.value)(key.to_string()))
                 })
-                .grow(),
+                .grow(Dimension::Both),
                 when(takes_file, move || {
                     // An icon each way, so the row keeps its width for the name and the value;
                     // the title is what assistive technology and the tooltip read.
@@ -425,7 +421,7 @@ fn pairs_editor(scene: Scene, rows: Rows, ids: &'static PairIds) -> impl Piece {
             ))
             .spacing(6.0)
             .align(VAlign::Center);
-            adaptive((name.grow(), value.grow())).spacing(6.0)
+            adaptive((name.grow(Dimension::Both), value.grow(Dimension::Both))).spacing(6.0)
         }),
         button(res::str::cmd_add()).compact().action(move || scene.add_row(rows)).id((ids.add)()),
     ))
@@ -507,7 +503,7 @@ fn body_tab(scene: Scene) -> impl Piece {
                     text_field(scene.binary_path)
                         .placeholder(res::str::binary_hint())
                         .id(day::id!(binary_path))
-                        .grow(),
+                        .grow(Dimension::Both),
                     button(res::str::cmd_choose_file())
                         .action(move || scene.pick_binary())
                         .id(day::id!(binary_choose)),
@@ -548,7 +544,7 @@ fn auth_tab(scene: Scene) -> impl Piece {
     // Secrets stay hidden until asked for; a template tag in one is worth reading.
     let shown = Signal::new(false);
     let secret = move |text: Signal<String>, id: day::ElementId| {
-        secure_field(text).secure(move || !shown.get()).id(id).grow()
+        secure_field(text).secure(move || !shown.get()).id(id).grow(Dimension::Both)
     };
     column((
         // Derived, so the stored plugin type's choice exists from the first frame and follows
@@ -573,7 +569,9 @@ fn auth_tab(scene: Scene) -> impl Piece {
                 form((
                     labeled(
                         res::str::auth_username(),
-                        text_field(scene.auth_username).id(day::id!(auth_username)).grow(),
+                        text_field(scene.auth_username)
+                            .id(day::id!(auth_username))
+                            .grow(Dimension::Both),
                     ),
                     labeled(
                         res::str::auth_password(),
@@ -589,7 +587,9 @@ fn auth_tab(scene: Scene) -> impl Piece {
                     labeled(res::str::auth_token(), secret(scene.auth_token, day::id!(auth_token))),
                     labeled(
                         res::str::auth_prefix(),
-                        text_field(scene.auth_prefix).id(day::id!(auth_prefix)).grow(),
+                        text_field(scene.auth_prefix)
+                            .id(day::id!(auth_prefix))
+                            .grow(Dimension::Both),
                     ),
                 ))
             },
@@ -612,7 +612,7 @@ fn auth_tab(scene: Scene) -> impl Piece {
                                 res::str::auth_key_header().format()
                             }
                         },
-                        text_field(scene.auth_key).id(day::id!(auth_key)).grow(),
+                        text_field(scene.auth_key).id(day::id!(auth_key)).grow(Dimension::Both),
                     ),
                     labeled(res::str::auth_value(), secret(scene.auth_value, day::id!(auth_value))),
                 ))
@@ -680,7 +680,7 @@ fn settings_tab(scene: Scene) -> impl Piece {
                     .placeholder(res::str::setting_timeout_hint())
                     .input_purpose(InputPurpose::Number)
                     .id(day::id!(set_timeout))
-                    .grow(),
+                    .grow(Dimension::Both),
             ),
         )),
         label(res::str::settings_hint()).font(Font::Footnote).secondary(),
@@ -746,7 +746,7 @@ fn history_row(scene: Scene) -> impl Piece {
     let labels =
         move || scene.history.get().iter().map(history_label).enumerate().collect::<Vec<_>>();
     row((
-        picker(scene.history_index, labels).menu().id(day::id!(history)).grow(),
+        picker(scene.history_index, labels).menu().id(day::id!(history)).grow(Dimension::Both),
         button(res::str::cmd_clear_history())
             .compact()
             .action(move || scene.clear_history())
