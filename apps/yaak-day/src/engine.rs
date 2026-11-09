@@ -337,9 +337,11 @@ fn choose_data_dir() -> (PathBuf, bool) {
     let own = day_part_filesystem::data_dir()
         .map(|d| d.join(OWN_DIR))
         .unwrap_or_else(|_| PathBuf::from(OWN_DIR));
-    // A host that names the data directory (a scripted run, CI) gets a store of its own: a
-    // walkthrough must never edit the desktop app's workspaces.
-    let redirected = std::env::var_os("DAY_DATA_DIR").is_some_and(|d| !d.is_empty());
+    // Scripted runs use this client's sandbox without opening the desktop store. A boolean
+    // works on phones too; forwarding a host /tmp path would escape their writable sandbox.
+    // An explicit DAY_DATA_DIR continues to select an independent store as before.
+    let redirected = std::env::var_os("DAY_DATA_DIR").is_some_and(|d| !d.is_empty())
+        || std::env::var_os("YAAK_DAY_ISOLATED").is_some_and(|v| v == "1");
     if !redirected
         && cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows"))
         && let Ok(root) = day_part_filesystem::platform_data_dir()

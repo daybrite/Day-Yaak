@@ -53,5 +53,5 @@ jobs:
         linux-gtk, linux-qt: libdbus-1-dev
       # The example workspace is created on first launch, so the walkthrough has requests to
       # open without a network.
-      launch-env: DAY_DATA_DIR=/tmp/yaak-day-ci
+      launch-env: YAAK_DAY_ISOLATED=1
       tolerate-failures: true

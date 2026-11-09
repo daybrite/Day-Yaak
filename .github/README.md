@@ -64,8 +64,9 @@ The steps, in the order they happened, so another Tauri project can follow them.
 3. **Choose where the data lives.** `day_part_filesystem::platform_data_dir()` names the platform's
    application-data directory; Yaak desktop's store is `app.yaak.desktop/db.sqlite` under it.
    On a desktop the client opens that when it exists, otherwise, and on every phone, it opens a
-   store of its own under Day's data directory. A host that sets `DAY_DATA_DIR` (a scripted run,
-   CI) always gets the private store, so a walkthrough never edits real workspaces.
+   store of its own under Day's data directory. CI sets `YAAK_DAY_ISOLATED=1` to select the
+   private store on every platform without forwarding a host filesystem path into a phone.
+   An explicit `DAY_DATA_DIR` also selects the private store for local desktop runs.
 
 4. **Model the window.** `src/model.rs` holds one `Scene` per window: the selected workspace and
    request as signals, the editor's fields bound to the store, the header rows as a keyed store,
